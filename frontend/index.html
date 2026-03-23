@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CryptoCall — Onchain AI Prediction Market</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <div class="logo">
+        <span class="title">◈ CRYPTOCALL</span>
+        <span class="sub">Powered by Onchain OS | X Layer Mainnet</span>
+      </div>
+      <button id="connect-wallet-btn" class="wallet-btn" onclick="connectWallet()">CONNECT WALLET</button>
+    </header>
+
+    <main>
+      <section class="panel">
+        <h2>ACTIVE MARKET</h2>
+        <div id="market-card" class="market-card">
+          <div class="loading">
+             <div id="live-price-badge" class="live-price-badge">BTC-USDC: <span id="current-price-val">...</span></div>
+             Waiting for Agent to create market...
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>YOUR BETS <span id="connected-wallet-text" class="accent-text"></span></h2>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Market</th>
+                <th>Position</th>
+                <th>Stake</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody id="bets-tbody">
+              <tr><td colspan="4" class="empty-state">No bets placed yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>LAST RESOLVED</h2>
+        <div id="last-resolved-content" class="resolved-container">
+          <div class="empty-state">No markets resolved yet</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Bet Modal -->
+    <div id="bet-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <h3 id="modal-question" class="modal-title"></h3>
+        
+        <div class="modal-details">
+          <div class="detail-row">
+            <span>Your position:</span>
+            <strong id="modal-position"></strong>
+          </div>
+          <div class="detail-row">
+            <span>Minimum stake:</span>
+            <span>0.01 USDC</span>
+          </div>
+          <div class="detail-row input-row">
+            <span>Enter amount:</span>
+            <div class="input-wrapper">
+              <input type="number" id="bet-amount" min="0.01" step="0.01" value="0.05">
+              <span>USDC</span>
+            </div>
+          </div>
+          <div class="detail-row">
+            <span>Your wallet:</span>
+            <span id="modal-wallet-address" class="accent-text"></span>
+          </div>
+        </div>
+
+        <button id="confirm-bet-btn" class="confirm-btn" onclick="confirmBet()">CONFIRM BET</button>
+        <div id="modal-tx-status" class="tx-status"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

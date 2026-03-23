@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.log
+deployment-info.json
+cache/
+artifacts/
+data/
