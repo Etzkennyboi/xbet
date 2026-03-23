@@ -111,3 +111,4 @@ if (isMain) {
   });
 }
 
+export default app;

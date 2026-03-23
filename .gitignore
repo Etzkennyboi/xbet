@@ -5,3 +5,5 @@ deployment-info.json
 cache/
 artifacts/
 data/
+
+.vercel
