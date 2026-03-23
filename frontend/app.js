@@ -27,7 +27,7 @@ const els = {
   betsTbody: document.getElementById('bets-tbody'),
   lastResolved: document.getElementById('last-resolved-content'),
   walletText: document.getElementById('connected-wallet-text'),
-  
+
   // Modal
   modal: document.getElementById('bet-modal'),
   mQuestion: document.getElementById('modal-question'),
@@ -40,7 +40,7 @@ const els = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log("DOM Loaded, initializing...");
-  
+
   // Wait for ethers to be defined (max 5 seconds)
   let retryCount = 0;
   while (typeof ethers === 'undefined' && retryCount < 50) {
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (window.ethereum) {
     window.ethereum.on('accountsChanged', handleAccountsChanged);
     window.ethereum.on('chainChanged', () => window.location.reload());
-    
+
     // Auto-connect on page load/refresh silently if previously authorized
     try {
       const accounts = await window.ethereum.request({ method: 'eth_accounts' });
@@ -68,7 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log("Wallet connection persisted from previous session");
         handleAccountsChanged(accounts);
       }
-    } catch(e) {
+    } catch (e) {
       console.warn("Failed to check existing connected accounts:", e);
     }
   }
@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function setupWebSocket() {
   const wsUrl = window.location.protocol === 'https:' ? `wss://${window.location.host}` : `ws://${window.location.host}`;
   const ws = new WebSocket(wsUrl);
-  
+
   ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
@@ -91,10 +91,10 @@ function setupWebSocket() {
         fetchMarket();
         if (data.type === 'MARKET_UPDATED') fetchBets();
       }
-      fetchAgentWallet(); 
-    } catch(e) {}
+      fetchAgentWallet();
+    } catch (e) { }
   };
-  
+
   ws.onclose = () => setTimeout(setupWebSocket, 3000);
 }
 
@@ -114,12 +114,12 @@ async function fetchLivePrice() {
     if (data.price) {
       const el = document.getElementById('current-price-val');
       if (el) {
-          el.textContent = `$${data.price.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-          el.classList.add('updated');
-          setTimeout(() => el.classList.remove('updated'), 500);
+        el.textContent = `$${data.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+        el.classList.add('updated');
+        setTimeout(() => el.classList.remove('updated'), 500);
       }
     }
-  } catch(e) {}
+  } catch (e) { }
 }
 
 async function fetchAgentWallet() {
@@ -127,7 +127,7 @@ async function fetchAgentWallet() {
     const r = await fetch('/api/agent-wallet');
     const data = await r.json();
     agentWallet = data.address;
-  } catch(e) {}
+  } catch (e) { }
 }
 
 async function fetchMarket() {
@@ -135,7 +135,7 @@ async function fetchMarket() {
     const r = await fetch('/api/market');
     const m = await r.json();
     renderMarket(m);
-  } catch(e) {}
+  } catch (e) { }
 }
 
 async function fetchBets() {
@@ -145,7 +145,7 @@ async function fetchBets() {
     const bets = await r.json();
     const myBets = bets.filter(b => b.wallet.toLowerCase() === currentAccount.toLowerCase());
     renderBets(myBets);
-  } catch(e) {}
+  } catch (e) { }
 }
 
 async function fetchHistory() {
@@ -155,20 +155,20 @@ async function fetchHistory() {
     renderHistory(localHistory);
     // After history is updated, re-render bets to update their status (won/lost)
     fetchBets();
-  } catch(e) {}
+  } catch (e) { }
 }
 
 // User Action: Clicking the "Connect Wallet" button
 async function connectWallet() {
   if (!window.ethereum) return alert('Please install MetaMask to play.');
-  
+
   try {
     // 1. Request access to the wallet
     const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-    
+
     // 2. Immediately switch to X Layer network
     await switchToXLayer();
-    
+
     // 3. Complete binding
     handleAccountsChanged(accounts);
   } catch (err) {
@@ -183,7 +183,7 @@ async function switchToXLayer() {
       method: 'wallet_switchEthereumChain',
       params: [{ chainId: `0x${CONFIG.CHAIN_ID.toString(16)}` }]
     });
-  } catch(err) {
+  } catch (err) {
     // If chain doesn't exist, prompt to add it
     if (err.code === 4902) {
       try {
@@ -218,7 +218,7 @@ async function handleAccountsChanged(accounts) {
   }
 
   currentAccount = accounts[0];
-  const short = `${currentAccount.slice(0,6)}...${currentAccount.slice(-4)}`;
+  const short = `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}`;
   els.connectBtn.textContent = `Connected: ${short}`;
   els.connectBtn.classList.add('connected');
   els.walletText.textContent = `(${short})`;
@@ -231,7 +231,7 @@ async function handleAccountsChanged(accounts) {
   // Check underlying network silently
   const chainId = await window.ethereum.request({ method: 'eth_chainId' });
   if (parseInt(chainId, 16) !== CONFIG.CHAIN_ID) {
-     console.warn("Wallet connected to incorrect chain. Expecting", CONFIG.CHAIN_ID, "Got", parseInt(chainId, 16));
+    console.warn("Wallet connected to incorrect chain. Expecting", CONFIG.CHAIN_ID, "Got", parseInt(chainId, 16));
   }
 
   fetchBets();
@@ -262,9 +262,9 @@ function renderMarket(m) {
     <div class="market-title">${m.question}</div>
     <div class="stats-grid">
       <div class="stats-label">Start Price:</div>
-      <div class="stats-val">$${m.startPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+      <div class="stats-val">$${m.startPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
       <div class="stats-label">Target Price:</div>
-      <div class="stats-val">$${m.targetPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+      <div class="stats-val">$${m.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
       <div class="stats-label">Time Left:</div>
       <div class="stats-val time-left" id="time-left-display">--:--</div>
       ${agentDisplay}
@@ -290,9 +290,9 @@ function renderMarket(m) {
     const el = document.getElementById('time-left-display');
     const bar = document.getElementById('progress-bar');
     if (!el) return;
-    
+
     // Update Progress Bar
-    const total = 5 * 60 * 1000;
+    const total = 2 * 60 * 1000;
     const elapsed = Date.now() - m.startTime;
     const progress = Math.max(0, 100 - (elapsed / total * 100));
     if (bar) bar.style.width = `${progress}%`;
@@ -308,14 +308,14 @@ function renderMarket(m) {
       el.textContent = `${mins}:${secs}`;
     }
   };
-  
+
   updateTimer();
   countdownTimer = setInterval(updateTimer, 1000);
 
-  fetch('/api/agent-wallet').then(r=>r.json()).then(d => {
+  fetch('/api/agent-wallet').then(r => r.json()).then(d => {
     const el = document.getElementById('dynamic-agent-balance');
     if (el) el.textContent = `$${d.balance.toFixed(2)} USDC`;
-  }).catch(()=>{});
+  }).catch(() => { });
 }
 
 function renderBets(bets) {
@@ -324,19 +324,19 @@ function renderBets(bets) {
     return;
   }
 
-  bets.sort((a,b) => b.timestamp - a.timestamp);
+  bets.sort((a, b) => b.timestamp - a.timestamp);
 
   els.betsTbody.innerHTML = bets.map(b => {
     // Check if the market this bet belongs to has been resolved
     const resolved = localHistory.find(h => h.id === b.marketId);
-    
+
     let statusHtml = '<span class="status-pending">⏳ PENDING</span>';
     let rowClass = "";
 
     if (resolved) {
       const won = resolved.result === b.position;
-      statusHtml = won 
-        ? `<span class="status-won">💰 WON (+$${(b.stake * 2).toFixed(2)})</span>` 
+      statusHtml = won
+        ? `<span class="status-won">💰 WON (+$${(b.stake * 2).toFixed(2)})</span>`
         : `<span class="status-lost">❌ LOST (-$${b.stake.toFixed(2)})</span>`;
       rowClass = won ? "row-won" : "row-lost";
     } else if (b.marketId !== activeMarketId) {
@@ -366,7 +366,7 @@ function renderHistory(history) {
 
   els.lastResolved.innerHTML = `
     <div class="desc">
-      BTC closed at <strong>$${last.finalPrice.toLocaleString(undefined, {minimumFractionDigits: 2})}</strong> → <span class="${isYesWin ? 'won' : 'lost'}">${last.result} WON</span>
+      BTC closed at <strong>$${last.finalPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong> → <span class="${isYesWin ? 'won' : 'lost'}">${last.result} WON</span>
     </div>
     <div class="details">
       ${winnersCount} winners paid | TX records onchain
@@ -379,13 +379,13 @@ function renderHistory(history) {
 function openBetModal(position) {
   if (!activeMarketId || !currentAccount) return;
   selectedPosition = position;
-  
+
   els.mQuestion.textContent = document.querySelector('.market-title').textContent;
   els.mPosition.textContent = position;
   els.mPosition.style.color = `var(--${position.toLowerCase()}-color)`;
-  els.mWallet.textContent = `${currentAccount.slice(0,6)}...${currentAccount.slice(-4)}`;
+  els.mWallet.textContent = `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}`;
   els.mAmount.value = "0.05";
-  
+
   els.mStatus.textContent = '';
   els.mStatus.className = 'tx-status';
   els.mConfirmBtn.disabled = false;
@@ -430,24 +430,24 @@ async function confirmBet() {
   try {
     const amountWei = ethers.utils.parseUnits(amount.toFixed(CONFIG.USDC_DECIMALS), CONFIG.USDC_DECIMALS);
     console.log(`Sending ${amount} USDC (${amountWei.toString()} units) to ${agentWallet}`);
-    
+
     // Explicitly check for USDC balance before sending
     const balance = await usdcContract.balanceOf(currentAccount);
     console.log("User Balance:", ethers.utils.formatUnits(balance, CONFIG.USDC_DECIMALS));
-    
+
     if (balance.lt(amountWei)) {
-        throw new Error(`Insufficient USDC balance. You have ${ethers.utils.formatUnits(balance, CONFIG.USDC_DECIMALS)} USDC.`);
+      throw new Error(`Insufficient USDC balance. You have ${ethers.utils.formatUnits(balance, CONFIG.USDC_DECIMALS)} USDC.`);
     }
 
     // This pops up MetaMask for the user to sign/confirm the transfer explicitly.
     const tx = await usdcContract.transfer(agentWallet, amountWei);
     console.log("Transaction submitted:", tx.hash);
-    
-    els.mStatus.textContent = `Tx sent! Hash: ${tx.hash.slice(0,10)}... Waiting for confirmation...`;
-    
+
+    els.mStatus.textContent = `Tx sent! Hash: ${tx.hash.slice(0, 10)}... Waiting for confirmation...`;
+
     const receipt = await tx.wait();
     console.log("Transaction confirmed:", receipt);
-    
+
     els.mStatus.textContent = 'Tx confirmed! Registering with Agent...';
 
     const r = await fetch('/api/bet', {
@@ -466,7 +466,7 @@ async function confirmBet() {
 
     els.mStatus.textContent = '✅ Bet placed successfully!';
     els.mConfirmBtn.textContent = 'SUCCESS';
-    
+
     fetchBets();
     fetchMarket();
     setTimeout(closeModal, 2000);
@@ -476,10 +476,10 @@ async function confirmBet() {
     els.mConfirmBtn.disabled = false;
     els.mConfirmBtn.textContent = 'CONFIRM BET';
     els.mStatus.className = 'tx-status error';
-    
+
     let msg = err.reason || err.message || 'Transaction failed';
     if (err.code === 4001) msg = "Transaction rejected by user.";
-    
+
     els.mStatus.textContent = msg;
     alert("Error: " + msg);
   }
