@@ -6,8 +6,9 @@ function App() {
   const [txHashMap, setTxHashMap] = useState({})
   const [statusMap, setStatusMap] = useState({})
   
-  // Replace this with your dynamic domain in production
-  const API_URL = 'http://localhost:3001/api'
+  // Use relative path for production (served from same origin)
+  // Use VITE_API_URL or localhost for development
+  const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api')
 
   useEffect(() => {
     fetch(`${API_URL}/bounties`)

@@ -4,6 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "start": "node src/index.js",
+    "build": "cd frontend && npm install && npm run build",
+    "postinstall": "echo 'Root and frontend install skipped manually to save time unless building'",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
