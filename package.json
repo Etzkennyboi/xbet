@@ -8,8 +8,7 @@
     "dev": "node backend/server.js",
     "deploy:contract": "npx hardhat run scripts/deploy.js --network xlayer",
     "compile": "npx hardhat compile",
-    "test": "npx hardhat test",
-    "postinstall": "curl -sSL https://raw.githubusercontent.com/okx/onchainos-skills/main/install.sh | sh && mkdir -p ./bin && mv $HOME/.local/bin/onchainos ./bin/onchainos"
+    "test": "npx hardhat test"
   },
   "dependencies": {
     "@vercel/kv": "^3.0.0",

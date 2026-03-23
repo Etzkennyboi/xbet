@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "data": {
+    "accountCount": 3,
+    "apiKey": "28c9786b-053b-48df-959f-0d6beacc1d0a",
+    "currentAccountId": "81bf4c60-4ecb-47d5-a768-cd78e7ea7788",
+    "currentAccountName": "Account 3",
+    "email": "",
+    "loggedIn": true,
+    "loginType": "ak"
+  }
+}

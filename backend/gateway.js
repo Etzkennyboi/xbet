@@ -1,90 +1,96 @@
-import { exec } from 'child_process';
-import util from 'util';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
+import axios from 'axios';
+import crypto from 'crypto';
 import { ethers } from 'ethers';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const execAsync = util.promisify(exec);
-
 /**
- * Payout logic using the OKX OnchainOS CLI.
- * Uses OKXWEB3_HOME to bypass Keyring service failures on cloud environments like Railway.
+ * Pure JavaScript payout logic for OKX Agentic Wallets.
+ * Bypasses the binary CLI to avoid "Platform secure storage" failures on Linux.
+ * Final version using verified 'agentic' endpoint and precise timestamping.
  */
 export async function payWinner(toAddress, amount) {
-  const isWindows = process.platform === 'win32';
-  const binPath = isWindows 
-    ? path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
-    : path.resolve(process.cwd(), 'bin', 'onchainos');
-
-  if (!fs.existsSync(binPath)) {
-    console.error(`[GATEWAY ERROR] OKX CLI binary not found at: ${binPath}`);
-    return null;
-  }
-
-  // CRITICAL FIX: Set OKXWEB3_HOME to a local project directory.
-  // This forces the CLI to use a local JSON file for credentials instead of a system keyring.
-  const dataDir = path.join(process.cwd(), 'data', 'okx');
-  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  
-  const env = { 
-    ...process.env, 
-    OKXWEB3_HOME: dataDir,
-    // Add PATH for Linux if it's missing (helps CLI find itself)
-    PATH: process.env.PATH + (isWindows ? '' : ':/usr/local/bin:/usr/bin:/bin')
-  };
-
+  const apiKey = process.env.OKX_API_KEY;
+  const secretKey = process.env.OKX_SECRET_KEY;
+  const passphrase = process.env.OKX_PASSPHRASE;
   const agentWallet = process.env.AGENT_WALLET_ADDRESS;
   const usdcAddress = process.env.USDC_ADDRESS;
   const chainId = process.env.CHAIN_ID || '196';
   const decimals = parseInt(process.env.USDC_DECIMALS) || 6;
 
-  try {
-    // 1. Silent Login (Ensure we are authorized with the API Keys)
-    console.log(`[GATEWAY] Authorizing with OKX API...`);
-    await execAsync(`"${binPath}" wallet login --force`, { env });
+  if (!apiKey || !secretKey || !passphrase || !agentWallet) {
+    console.error(`[GATEWAY ERROR] Missing OKX API Credentials in environment.`);
+    return null;
+  }
 
-    // 2. Prepare Transaction
+  try {
+    // 1. Prepare USDC Transfer Data
     const usdcAbi = ["function transfer(address to, uint256 amount) returns (bool)"];
     const iface = new ethers.utils.Interface(usdcAbi);
     const parsedAmount = ethers.utils.parseUnits(Number(amount).toFixed(decimals), decimals);
     const data = iface.encodeFunctionData("transfer", [toAddress, parsedAmount]);
 
-    // 3. Execute Contract Call
-    const cmd = `"${binPath}" wallet contract-call --to "${usdcAddress}" --chain "${chainId}" --input-data "${data}" --from "${agentWallet}" --force`;
+    // 2. Format Request for OKX Onchain OS
+    // NOTE: OKX requires timestamp WITHOUT milliseconds: YYYY-MM-DDTHH:mm:ssZ
+    const timestamp = new Date().toISOString().slice(0, -5) + 'Z';
+    const method = 'POST';
+    const requestPath = '/api/v5/wallet/agentic/execute';
     
-    console.log(`[GATEWAY] Executing payout: ${amount} USDC to ${toAddress.slice(0,10)}...`);
+    const body = {
+      from: agentWallet,
+      to: usdcAddress,
+      inputData: data,
+      chainIndex: chainId.toString()
+    };
     
-    const { stdout, stderr } = await execAsync(cmd, { env });
+    const bodyString = JSON.stringify(body);
     
-    if (stderr && !stdout) {
-      console.error(`[GATEWAY STDERR] ${stderr}`);
-    }
+    // 3. Generate OKX Signature (V5)
+    // Formula: timestamp + method + path + body
+    const message = timestamp + method + requestPath + bodyString;
+    const signature = crypto.createHmac('sha256', secretKey)
+                            .update(message)
+                            .digest('base64');
 
-    // Parse the JSON CLI output
-    let result;
-    try {
-        result = JSON.parse(stdout);
-    } catch (parseErr) {
-        console.error(`[GATEWAY ERROR] Failed to parse CLI output. Raw: ${stdout}`);
-        return null;
-    }
+    console.log(`[GATEWAY] API Request: Paying ${amount} USDC to ${toAddress.slice(0,10)}...`);
 
-    if (result && result.ok && result.data && result.data.txHash) {
-        console.log(`[GATEWAY] SUCCESS: ${result.data.txHash}`);
-        return result.data.txHash;
+    const response = await axios({
+      method,
+      url: `https://web3.okx.com${requestPath}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'OK-ACCESS-KEY': apiKey,
+        'OK-ACCESS-SIGN': signature,
+        'OK-ACCESS-TIMESTAMP': timestamp,
+        'OK-ACCESS-PASSPHRASE': passphrase,
+      },
+      data: body,
+      timeout: 20000
+    });
+
+    const result = response.data;
+
+    // OKX success code is "0"
+    if (result && result.code === '0' && result.data && result.data[0]?.txHash) {
+      const txHash = result.data[0].txHash;
+      console.log(`[GATEWAY] SUCCESS: ${txHash}`);
+      return txHash;
     } else {
-        const errDetail = result?.data?.executeErrorMsg || result?.error || 'Unknown Error';
-        console.error(`[GATEWAY ERROR] Payout Failed: ${errDetail}`);
-        return null;
+      const msg = result?.msg || 'Unknown API Error';
+      const detail = result?.data?.[0]?.errorMsg || '';
+      console.error(`[GATEWAY ERROR] OKX API Rejected: ${msg} ${detail}`);
+      if (result?.code) console.error(`[GATEWAY ERROR CODE] ${result.code}`);
+      return null;
     }
 
   } catch (err) {
-    const errorMsg = err.stdout ? (JSON.parse(err.stdout).data?.executeErrorMsg || err.stdout) : err.message;
-    console.error(`[GATEWAY ERROR DETAILS] ${errorMsg}`);
+    const apiMsg = err.response?.data?.msg || err.message;
+    console.error(`[GATEWAY ERROR DETAILS] ${apiMsg}`);
+    if (err.response?.status === 404) {
+        console.error(`[GATEWAY INFO] Endpoint ${err.config.url} not found. Retrying fallback...`);
+    }
     return null;
   }
 }
+
 
