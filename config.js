@@ -20,7 +20,7 @@ export const CONFIG = {
 
   MARKET_CONTRACT_ADDRESS: process.env.CONTRACT_ADDRESS || null,
 
-  BACKEND_URL: `http://localhost:${process.env.PORT || 3000}`,
+  BACKEND_URL: `http://localhost:${process.env.PORT || 3000}` || 'https://xbet-main.vercel.app/',
 };
 
 export const USDC_ABI = [

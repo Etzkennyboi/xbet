@@ -56,7 +56,7 @@ app.get('/api/agent-wallet', async (req, res) => {
 app.post('/api/bet', async (req, res) => {
   try {
     const { wallet, position, amount, txHash } = req.body;
-    
+
     if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) {
       return res.status(400).json({ error: 'Invalid wallet address' });
     }
@@ -67,13 +67,13 @@ app.post('/api/bet', async (req, res) => {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
-    const result = await recordEntry({ 
-      wallet: wallet.toLowerCase(), 
-      position: position.toUpperCase(), 
-      amount, 
-      txHash 
+    const result = await recordEntry({
+      wallet: wallet.toLowerCase(),
+      position: position.toUpperCase(),
+      amount,
+      txHash
     });
-    
+
     broadcast({ type: 'MARKET_UPDATED', market: result.market });
     res.json({ success: true, bet: result.bet, market: result.market });
   } catch (err) {
@@ -104,7 +104,7 @@ if (isMain) {
     console.log(`
 ╔═══════════════════════════════════════════╗
 ║   CryptoCall Agent is LIVE 🚀             ║
-║   http://localhost:${PORT}                   ║
+║   http://localhost:${PORT} or https://xbet-main.vercel.app/                 ║
 ║   USDC Agent Wallet mode active           ║
 ╚═══════════════════════════════════════════╝
     `);
