@@ -6,8 +6,9 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { startScheduler } from './scheduler.js';
 import { recordEntry } from './agent.js';
-import { loadMarket, loadBets, loadHistory } from './db.js';
+import { loadMarkets, loadBets, loadHistory } from './db.js';
 import { getAgentAddress, getAgentBalance } from './wallet-api.js';
+import { getPrice } from './market-api.js';
 
 dotenv.config();
 
@@ -28,9 +29,10 @@ export function broadcast(data) {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../frontend')));
 
+
 // API Routes
 app.get('/api/market', (req, res) => {
-  res.json(loadMarket() || {});
+  res.json(loadMarkets() || []);
 });
 
 app.get('/api/bets', (req, res) => {
@@ -42,10 +44,11 @@ app.get('/api/history', (req, res) => {
 });
 
 app.get('/api/price', async (req, res) => {
-  const { getBTCPrice } = await import('./market-api.js');
-  const price = await getBTCPrice();
-  res.json({ price });
+  const symbol = req.query.symbol || 'BTC';
+  const price = await getPrice(symbol);
+  res.json({ symbol, price });
 });
+
 
 app.get('/api/agent-wallet', async (req, res) => {
   const address = getAgentAddress();
@@ -71,8 +74,10 @@ app.post('/api/bet', async (req, res) => {
       wallet: wallet.toLowerCase(),
       position: position.toUpperCase(),
       amount,
-      txHash
+      txHash,
+      marketId: req.body.marketId
     });
+
 
     broadcast({ type: 'MARKET_UPDATED', market: result.market });
     res.json({ success: true, bet: result.bet, market: result.market });

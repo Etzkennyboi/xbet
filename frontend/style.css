@@ -87,11 +87,25 @@ header {
   font-weight: normal;
 }
 
+.markets-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
 .market-card {
   border: 1px solid var(--border);
   padding: 20px;
   background: var(--panel-bg);
+  position: relative;
+  transition: transform 0.2s;
 }
+
+.market-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-dim);
+}
+
 
 .market-title {
   font-size: 1.1rem;

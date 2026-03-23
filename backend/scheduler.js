@@ -1,21 +1,27 @@
 import { createMarket, resolveMarket } from './agent.js';
-import { loadMarket } from './db.js';
+import { loadMarkets } from './db.js';
+
+const SYMBOLS = ['BTC', 'ETH', 'SOL'];
 
 export async function startScheduler() {
-  console.log('⏰ Starting 2-minute Market Scheduler...');
+  console.log(`⏰ Starting Multi-Market Scheduler for: ${SYMBOLS.join(', ')}...`);
 
-  // Continuous 5-second interval to check state
+  // Continuous interval to check status of all active symbols
   setInterval(async () => {
     try {
-      const market = loadMarket();
+      const activeMarkets = loadMarkets();
 
-      if (!market || market.status === 'resolved') {
-        // Time to create a new market
-        await createMarket();
-      } else if (market.status === 'open' || market.status === 'resolving') {
-        // Check if current market has expired
-        if (Date.now() >= market.expiresAt) {
-          await resolveMarket();
+      for (const symbol of SYMBOLS) {
+        const market = activeMarkets.find(m => m.symbol === symbol);
+
+        if (!market) {
+          // Missing market for this symbol
+          await createMarket(symbol);
+        } else if (market.status === 'open' || market.status === 'resolving') {
+          // Check if current market has expired
+          if (Date.now() >= market.expiresAt) {
+            await resolveMarket(market.id);
+          }
         }
       }
     } catch (err) {
@@ -23,15 +29,15 @@ export async function startScheduler() {
     }
   }, 5000);
 
-  // Initial startup trigger
+  // Initial startup trigger (sequential to avoid nonce/processing conflicts)
   setTimeout(async () => {
-    try {
-      const market = loadMarket();
-      if (!market || market.status === 'resolved') {
-        await createMarket();
+    for (const symbol of SYMBOLS) {
+      const activeMarkets = loadMarkets();
+      if (!activeMarkets.find(m => m.symbol === symbol)) {
+        await createMarket(symbol);
+        await new Promise(r => setTimeout(r, 2000)); // Small gap
       }
-    } catch (err) {
-      console.error('Initial market creation failed:', err.message);
     }
   }, 2000);
 }
+

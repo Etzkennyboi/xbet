@@ -16,20 +16,51 @@ if (!existsSync(MARKET_FILE)) writeFileSync(MARKET_FILE, JSON.stringify(null));
 if (!existsSync(BETS_FILE)) writeFileSync(BETS_FILE, JSON.stringify([]));
 if (!existsSync(HISTORY_FILE)) writeFileSync(HISTORY_FILE, JSON.stringify([]));
 
-// --- Active Market ---
-export function loadMarket() {
+// --- Active Markets ---
+export function loadMarkets() {
   try {
+    if (!existsSync(MARKET_FILE)) return [];
     const data = readFileSync(MARKET_FILE, 'utf8');
-    return JSON.parse(data);
+    const markets = JSON.parse(data);
+    return Array.isArray(markets) ? markets : (markets ? [markets] : []);
   } catch (err) {
     console.error('Error reading market.json:', err.message);
-    return null;
+    return [];
   }
 }
 
-export function saveMarket(market) {
-  writeFileSync(MARKET_FILE, JSON.stringify(market, null, 2));
+export function saveMarkets(markets) {
+  writeFileSync(MARKET_FILE, JSON.stringify(markets, null, 2));
 }
+
+// Backward compatibility or convenience
+export const loadMarket = () => loadMarkets()[0] || null;
+export const saveMarket = (m) => saveMarkets(m ? [m] : []);
+
+/**
+ * Multiple Market Helpers
+ */
+export function addMarket(market) {
+  const markets = loadMarkets();
+  markets.push(market);
+  saveMarkets(markets);
+}
+
+export function updateMarket(market) {
+  const markets = loadMarkets();
+  const idx = markets.findIndex(m => m.id === market.id);
+  if (idx !== -1) {
+    markets[idx] = market;
+    saveMarkets(markets);
+  }
+}
+
+export function removeMarket(marketId) {
+  const markets = loadMarkets();
+  const filtered = markets.filter(m => m.id !== marketId);
+  saveMarkets(filtered);
+}
+
 
 // --- Bets ---
 export function loadBets(marketId = null) {
