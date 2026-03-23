@@ -1,0 +1,15 @@
+[GATEWAY] Executing Auth-Payout: 0.02 USDC to 0x5c678692...
+[GATEWAY ERROR] Full Response: {
+  "executeErrorMsg": "origin error: Contract call fail, node result error when get estimateGas error chain= code=-32000 message=invalid opcode: opcode 0xa9 not defined",
+  "executeResult": false,
+  "extraData": null,
+  "signType": null,
+  "encoding": null,
+  "unsignedTxHash": null,
+  "unsignedTx": null,
+  "jitoUnsignedTx": null,
+  "uopHash": null,
+  "hash": null,
+  "authHashFor7702": null
+}
+[GATEWAY ERROR] Payout Failed: Unknown Error

@@ -1,0 +1,25 @@
+[GATEWAY] Executing Auth-Payout: 0.02 USDC to 0x5c678692...
+[GATEWAY ERROR] Full Response: {
+  "executeErrorMsg": "",
+  "executeResult": true,
+  "extraData": {
+    "nonce": 1,
+    "tokenAddress": null,
+    "coinAmount": "0",
+    "toAdr": "0x74b7F16337b8972027F6196A17a631aC6dE26d22",
+    "serviceCharge": "0",
+    "gasPrice": 53702550,
+    "gasLimit": 68193,
+    "priorityFee": "26702550",
+    "inputData": "0xa9059cbb0000000000000000000000005c67869272f3d167c761dbbf0dc3901a1ff214d30000000000000000000000000000000000000000000000000000000000004e20"
+  },
+  "signType": "eip1559Tx",
+  "encoding": "hex",
+  "unsignedTxHash": null,
+  "unsignedTx": null,
+  "jitoUnsignedTx": null,
+  "uopHash": "0xc2cd21af4aeaf85a9468a02c4113d927838577ed9de26f737e49182d84c43f6f",
+  "hash": "0xde955cf118905b3b11b753642d6f1a164dbba8f0235b455522de46135b29e236",
+  "authHashFor7702": null
+}
+[GATEWAY ERROR] Payout Failed: Unknown Error

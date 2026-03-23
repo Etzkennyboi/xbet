@@ -27,7 +27,7 @@ const search = (term) => {
     }
 }
 
-search('/onchain/');
+search('/priapi/v5/');
 
 console.log('Found', results.length, 'matches:');
 console.log([...new Set(results)].sort().join('\n'));
