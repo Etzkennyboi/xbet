@@ -1,67 +1,87 @@
-import { exec } from 'child_process';
-import util from 'util';
+import axios from 'axios';
+import crypto from 'crypto';
 import { ethers } from 'ethers';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const execAsync = util.promisify(exec);
-
+/**
+ * Executes a contract call using the OKX Onchain OS API for Agentic Wallets.
+ * This allows the agent to sign transactions WITHOUT a private key,
+ * using the OKX platform's secure enclave (TEE).
+ */
 export async function payWinner(toAddress, amount) {
+  const apiKey = process.env.OKX_API_KEY;
+  const secretKey = process.env.OKX_SECRET_KEY;
+  const passphrase = process.env.OKX_PASSPHRASE;
   const agentWallet = process.env.AGENT_WALLET_ADDRESS;
   const usdcAddress = process.env.USDC_ADDRESS;
-  const chainId = process.env.CHAIN_ID || 196;
+  const chainId = process.env.CHAIN_ID || '196';
+  const decimals = parseInt(process.env.USDC_DECIMALS) || 6;
 
-  if (!agentWallet || !usdcAddress) {
-    console.error(`[GATEWAY ERROR] Missing AGENT_WALLET_ADDRESS or USDC_ADDRESS in environment.`);
+  if (!apiKey || !secretKey || !passphrase || !agentWallet) {
+    console.error(`[GATEWAY ERROR] Missing OKX API credentials or Agent address.`);
     return null;
   }
 
   try {
-    // 1. Manually encode the transfer payload using ethers (to bypass onchainos local token library)
+    // 1. Prepare Call Data
     const usdcAbi = ["function transfer(address to, uint256 amount) returns (bool)"];
     const iface = new ethers.utils.Interface(usdcAbi);
-    // USDC uses 6 decimals standard
-    const decimals = parseInt(process.env.USDC_DECIMALS) || 6;
     const parsedAmount = ethers.utils.parseUnits(Number(amount).toFixed(decimals), decimals);
     const data = iface.encodeFunctionData("transfer", [toAddress, parsedAmount]);
 
-    // 2. Invoke Onchain OS Wallet
-    const onchainosPath = process.env.USERPROFILE + '\\.local\\bin\\onchainos.exe';
-    const cmd = `"${onchainosPath}" wallet contract-call --to "${usdcAddress}" --chain ${chainId} --input-data "${data}" --from "${agentWallet}" --force`;
+    // 2. Setup OKX API Request
+    const timestamp = new Date().toISOString();
+    const method = 'POST';
+    const requestPath = '/api/v5/wallet/onchain/execute';
     
-    console.log(`[GATEWAY] Executing OnchainOS contract-call payout: ${amount} USDC to ${toAddress.slice(0,10)}...`);
+    const body = {
+      from: agentWallet,
+      to: usdcAddress,
+      inputData: data,
+      chainIndex: chainId.toString()
+    };
     
-    let stdout, stderr;
-    try {
-        const res = await execAsync(cmd);
-        stdout = res.stdout;
-        stderr = res.stderr;
-    } catch (cmdErr) {
-        // execAsync throws on non-zero exit code. We can still capture the JSON output from stdout to parse the error gracefully
-        stdout = cmdErr.stdout || "{}";
-    }
+    const bodyString = JSON.stringify(body);
     
-    // Parse the structured JSON response
-    const result = JSON.parse(stdout);
-    if (result && result.ok && result.data && result.data.txHash) {
-        console.log(`[GATEWAY] SUCCESS: ${result.data.txHash}`);
-        return result.data.txHash;
+    // 3. Generate OKX Signature
+    const message = timestamp + method + requestPath + bodyString;
+    const signature = crypto.createHmac('sha256', secretKey)
+                            .update(message)
+                            .digest('base64');
+
+    console.log(`[GATEWAY] Requesting OKX Agentic Wallet payout: ${amount} USDC to ${toAddress.slice(0,10)}...`);
+
+    const response = await axios({
+      method,
+      url: `https://www.okx.com${requestPath}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'OK-ACCESS-KEY': apiKey,
+        'OK-ACCESS-SIGN': signature,
+        'OK-ACCESS-TIMESTAMP': timestamp,
+        'OK-ACCESS-PASSPHRASE': passphrase,
+      },
+      data: body
+    });
+
+    const result = response.data;
+
+    if (result && result.code === '0' && result.data && result.data[0] && result.data[0].txHash) {
+      const txHash = result.data[0].txHash;
+      console.log(`[GATEWAY] SUCCESS: ${txHash}`);
+      return txHash;
     } else {
-        console.error(`[GATEWAY ERROR] Unexpected or failed response.`);
-        if (result && result.error) console.error(`[GATEWAY MSG] ${result.error}`);
-        if (result && result.data && result.data.executeErrorMsg) {
-           console.error(`[GATEWAY SIMULATION MSG] ${result.data.executeErrorMsg}`);
-           // Fallback for debugging locally when agent wallet has no funds
-           if (result.data.executeErrorMsg.includes("exceeds balance") || result.data.executeErrorMsg.includes("insufficient funds")) {
-             console.log(`[GATEWAY DEBUG] Returning mock tx for ${toAddress} due to lack of real funds in agent wallet.`);
-             return "mock_tx_" + Date.now();
-           }
-        }
-        return null;
+      console.error(`[GATEWAY ERROR] OKX API returned an error:`, result.msg || 'Unknown error');
+      if (result.data && result.data[0] && result.data[0].errorMsg) {
+         console.error(`[GATEWAY DETAIL] ${result.data[0].errorMsg}`);
+      }
+      return null;
     }
 
   } catch (err) {
-    console.error(`[GATEWAY ERROR DETAILS] ${err.message}`);
+    const errorMsg = err.response?.data?.msg || err.message;
+    console.error(`[GATEWAY ERROR DETAILS] ${errorMsg}`);
     return null;
   }
 }
