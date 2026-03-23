@@ -24,20 +24,24 @@ export async function payWinner(toAddress, amount) {
     return null;
   }
 
-  // Detect correct CLI path (Linux/Railway uses internal bin, Windows uses local home)
+  // Detect correct CLI path
   const isWindows = process.platform === 'win32';
-  const binPath = isWindows 
-    ? path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
-    : './bin/onchainos'; // Standard Linux relative execution
+  let binPath;
 
-  const fs = await import('fs');
+  if (isWindows) {
+    binPath = path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe');
+  } else {
+    // On Linux/Railway, prioritize the default OKX installer path
+    const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'onchainos');
+    const localBin = path.resolve(process.cwd(), 'bin', 'onchainos');
+    
+    const fs = await import('fs');
+    binPath = fs.existsSync(homeBin) ? homeBin : localBin;
+  }
+
+  const fs = await import('fs'); // Repetitive but safe for scoped access
   if (!fs.existsSync(binPath)) {
     console.error(`[GATEWAY ERROR] OKX CLI binary not found at: ${binPath}`);
-    console.error(`[GATEWAY INFO] Running 'ls -R ./bin' for debug:`);
-    try {
-        const { stdout: lsOut } = await execAsync('ls -R ./bin || echo "ls failed"');
-        console.log(lsOut);
-    } catch(e) {}
     return null;
   }
 
