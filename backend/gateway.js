@@ -28,7 +28,18 @@ export async function payWinner(toAddress, amount) {
   const isWindows = process.platform === 'win32';
   const binPath = isWindows 
     ? path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
-    : path.resolve(process.cwd(), 'bin', 'onchainos');
+    : './bin/onchainos'; // Standard Linux relative execution
+
+  const fs = await import('fs');
+  if (!fs.existsSync(binPath)) {
+    console.error(`[GATEWAY ERROR] OKX CLI binary not found at: ${binPath}`);
+    console.error(`[GATEWAY INFO] Running 'ls -R ./bin' for debug:`);
+    try {
+        const { stdout: lsOut } = await execAsync('ls -R ./bin || echo "ls failed"');
+        console.log(lsOut);
+    } catch(e) {}
+    return null;
+  }
 
   try {
     // 1. Prepare ABI Data
@@ -38,27 +49,47 @@ export async function payWinner(toAddress, amount) {
     const data = iface.encodeFunctionData("transfer", [toAddress, parsedAmount]);
 
     // 2. Invoke Onchain OS CLI
-    const cmd = `"${binPath}" wallet contract-call --to "${usdcAddress}" --chain ${chainId} --input-data "${data}" --from "${agentWallet}" --force`;
+    // Note: On Linux, we use the absolute path from process.cwd() or relative ./bin/onchainos
+    const fullBinPath = isWindows ? binPath : path.resolve(process.cwd(), binPath);
+    const cmd = `"${fullBinPath}" wallet contract-call --to "${usdcAddress}" --chain ${chainId} --input-data "${data}" --from "${agentWallet}" --force`;
     
-    console.log(`[GATEWAY] Executing CLI payout: ${amount} USDC to ${toAddress.slice(0,10)}...`);
+    console.log(`[GATEWAY] Executing payout: ${amount} USDC to ${toAddress.slice(0,10)}...`);
     
-    let stdout, stderr;
+    let stdout;
     try {
         const res = await execAsync(cmd);
         stdout = res.stdout;
     } catch (cmdErr) {
-        // Capture output even if it failed, as it might contain the JSON error body
-        stdout = cmdErr.stdout || "{}";
+        stdout = cmdErr.stdout || "";
+        console.error(`[GATEWAY ERROR] CLI execution failed. Exit Code: ${cmdErr.code}`);
+        if (cmdErr.stderr) console.error(`[GATEWAY STDERR] ${cmdErr.stderr}`);
+        
+        // Final fallback: Maybe the error is "Not Found" because of a missing shared library on Musl vs Gnu
+        if (cmdErr.message.toLowerCase().includes("not found")) {
+            console.error(`[GATEWAY INFO] "Not Found" usually means the binary exists but lacks libraries. Switching to npx fallback?`);
+        }
     }
     
+    if (!stdout.trim()) {
+       console.error(`[GATEWAY ERROR] CLI returned empty output. Check Railway Environment Variables.`);
+       return null;
+    }
+
     // Parse the JSON CLI output
-    const result = JSON.parse(stdout);
+    let result;
+    try {
+        result = JSON.parse(stdout);
+    } catch (parseErr) {
+        console.error(`[GATEWAY ERROR] Failed to parse CLI output: ${stdout}`);
+        return null;
+    }
+
     if (result && result.ok && result.data && result.data.txHash) {
         console.log(`[GATEWAY] SUCCESS: ${result.data.txHash}`);
         return result.data.txHash;
     } else {
-        const errDetail = result?.data?.executeErrorMsg || result?.error || 'Unknown CLI Error';
-        console.error(`[GATEWAY ERROR] CLI Failed: ${errDetail}`);
+        const errDetail = result?.data?.executeErrorMsg || result?.error || 'Unknown Error';
+        console.error(`[GATEWAY ERROR] Payout Failed: ${errDetail}`);
         return null;
     }
 

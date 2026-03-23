@@ -9,7 +9,7 @@
     "deploy:contract": "npx hardhat run scripts/deploy.js --network xlayer",
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
-    "postinstall": "mkdir -p ./bin && curl -sSL https://raw.githubusercontent.com/okx/onchainos-skills/main/install.sh | INSTALL_DIR=./bin sh"
+    "postinstall": "mkdir -p ./bin && curl -sSL https://raw.githubusercontent.com/okx/onchainos-skills/main/install.sh | INSTALL_DIR=./bin sh && chmod +x ./bin/onchainos"
   },
   "dependencies": {
     "@vercel/kv": "^3.0.0",
