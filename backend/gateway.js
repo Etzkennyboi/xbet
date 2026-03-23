@@ -26,20 +26,11 @@ export async function payWinner(toAddress, amount) {
 
   // Detect correct CLI path
   const isWindows = process.platform === 'win32';
-  let binPath;
+  const binPath = isWindows 
+    ? path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
+    : path.resolve(process.cwd(), 'bin', 'onchainos');
 
-  if (isWindows) {
-    binPath = path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe');
-  } else {
-    // On Linux/Railway, prioritize the default OKX installer path
-    const homeBin = path.join(process.env.HOME || '/root', '.local', 'bin', 'onchainos');
-    const localBin = path.resolve(process.cwd(), 'bin', 'onchainos');
-    
-    const fs = await import('fs');
-    binPath = fs.existsSync(homeBin) ? homeBin : localBin;
-  }
-
-  const fs = await import('fs'); // Repetitive but safe for scoped access
+  const fs = await import('fs');
   if (!fs.existsSync(binPath)) {
     console.error(`[GATEWAY ERROR] OKX CLI binary not found at: ${binPath}`);
     return null;
