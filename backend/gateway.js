@@ -1,95 +1,85 @@
-import { exec } from 'child_process';
-import util from 'util';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import axios from 'axios';
+import crypto from 'crypto';
 import { ethers } from 'ethers';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const execAsync = util.promisify(exec);
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 /**
- * Executes a contract call using the official OKX OnchainOS CLI.
- * This handles simulation, gas estimation, and the secure TEE signing.
+ * Pure JavaScript payout logic for OKX Agentic Wallets.
+ * Bypasses the binary CLI to avoid "Platform secure storage" failures on Linux.
  */
 export async function payWinner(toAddress, amount) {
+  const apiKey = process.env.OKX_API_KEY;
+  const secretKey = process.env.OKX_SECRET_KEY;
+  const passphrase = process.env.OKX_PASSPHRASE;
   const agentWallet = process.env.AGENT_WALLET_ADDRESS;
   const usdcAddress = process.env.USDC_ADDRESS;
-  const chainId = process.env.CHAIN_ID || 196;
+  const chainId = process.env.CHAIN_ID || '196';
   const decimals = parseInt(process.env.USDC_DECIMALS) || 6;
 
-  if (!agentWallet || !usdcAddress) {
-    console.error(`[GATEWAY ERROR] Missing AGENT_WALLET_ADDRESS or USDC_ADDRESS.`);
-    return null;
-  }
-
-  // Detect correct CLI path
-  const isWindows = process.platform === 'win32';
-  const binPath = isWindows 
-    ? path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
-    : path.resolve(process.cwd(), 'bin', 'onchainos');
-
-  const fs = await import('fs');
-  if (!fs.existsSync(binPath)) {
-    console.error(`[GATEWAY ERROR] OKX CLI binary not found at: ${binPath}`);
+  if (!apiKey || !secretKey || !passphrase || !agentWallet) {
+    console.error(`[GATEWAY ERROR] Missing OKX API Credentials in environment.`);
     return null;
   }
 
   try {
-    // 1. Prepare ABI Data
+    // 1. Prepare USDC Transfer Data
     const usdcAbi = ["function transfer(address to, uint256 amount) returns (bool)"];
     const iface = new ethers.utils.Interface(usdcAbi);
     const parsedAmount = ethers.utils.parseUnits(Number(amount).toFixed(decimals), decimals);
     const data = iface.encodeFunctionData("transfer", [toAddress, parsedAmount]);
 
-    // 2. Invoke Onchain OS CLI
-    // Note: On Linux, we use the absolute path from process.cwd() or relative ./bin/onchainos
-    const fullBinPath = isWindows ? binPath : path.resolve(process.cwd(), binPath);
-    const cmd = `"${fullBinPath}" wallet contract-call --to "${usdcAddress}" --chain ${chainId} --input-data "${data}" --from "${agentWallet}" --force`;
+    // 2. Format Request for OKX Onchain OS
+    const timestamp = new Date().toISOString();
+    const method = 'POST';
+    const requestPath = '/api/v5/wallet/onchain/execute';
     
-    console.log(`[GATEWAY] Executing payout: ${amount} USDC to ${toAddress.slice(0,10)}...`);
+    const body = {
+      from: agentWallet,
+      to: usdcAddress,
+      inputData: data,
+      chainIndex: chainId.toString()
+    };
     
-    let stdout;
-    try {
-        const res = await execAsync(cmd);
-        stdout = res.stdout;
-    } catch (cmdErr) {
-        stdout = cmdErr.stdout || "";
-        console.error(`[GATEWAY ERROR] CLI execution failed. Exit Code: ${cmdErr.code}`);
-        if (cmdErr.stderr) console.error(`[GATEWAY STDERR] ${cmdErr.stderr}`);
-        
-        // Final fallback: Maybe the error is "Not Found" because of a missing shared library on Musl vs Gnu
-        if (cmdErr.message.toLowerCase().includes("not found")) {
-            console.error(`[GATEWAY INFO] "Not Found" usually means the binary exists but lacks libraries. Switching to npx fallback?`);
-        }
-    }
-    
-    if (!stdout.trim()) {
-       console.error(`[GATEWAY ERROR] CLI returned empty output. Check Railway Environment Variables.`);
-       return null;
-    }
+    // 3. Generate OKX Signature (V5)
+    // Note: OKX V5 signature = timestamp + method + path + body
+    const message = timestamp + method + requestPath + JSON.stringify(body);
+    const signature = crypto.createHmac('sha256', secretKey)
+                            .update(message)
+                            .digest('base64');
 
-    // Parse the JSON CLI output
-    let result;
-    try {
-        result = JSON.parse(stdout);
-    } catch (parseErr) {
-        console.error(`[GATEWAY ERROR] Failed to parse CLI output: ${stdout}`);
-        return null;
-    }
+    console.log(`[GATEWAY] API Request: Paying ${amount} USDC to ${toAddress.slice(0,10)}...`);
 
-    if (result && result.ok && result.data && result.data.txHash) {
-        console.log(`[GATEWAY] SUCCESS: ${result.data.txHash}`);
-        return result.data.txHash;
+    const response = await axios({
+      method,
+      url: `https://www.okx.com${requestPath}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'OK-ACCESS-KEY': apiKey,
+        'OK-ACCESS-SIGN': signature,
+        'OK-ACCESS-TIMESTAMP': timestamp,
+        'OK-ACCESS-PASSPHRASE': passphrase,
+      },
+      data: body,
+      timeout: 15000
+    });
+
+    const result = response.data;
+
+    if (result && result.code === '0' && result.data && result.data[0]?.txHash) {
+      const txHash = result.data[0].txHash;
+      console.log(`[GATEWAY] SUCCESS: ${txHash}`);
+      return txHash;
     } else {
-        const errDetail = result?.data?.executeErrorMsg || result?.error || 'Unknown Error';
-        console.error(`[GATEWAY ERROR] Payout Failed: ${errDetail}`);
-        return null;
+      const msg = result?.msg || 'Unknown API Error';
+      const detail = result?.data?.[0]?.errorMsg || '';
+      console.error(`[GATEWAY ERROR] OKX API Rejected: ${msg} ${detail}`);
+      return null;
     }
 
   } catch (err) {
-    console.error(`[GATEWAY ERROR DETAILS] ${err.message}`);
+    const apiMsg = err.response?.data?.msg || err.message;
+    console.error(`[GATEWAY ERROR DETAILS] ${apiMsg}`);
     return null;
   }
 }
