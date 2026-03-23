@@ -14,11 +14,11 @@ export async function createMarket() {
     const startPrice = await getBTCPrice();
     const targetPrice = startPrice * (1 + (CONFIG.TARGET_PERCENT_UP || 0.005));
     const now = Date.now();
-    const durationMs = (CONFIG.MARKET_DURATION_MINUTES || 5) * 60 * 1000;
+    const durationMs = (CONFIG.MARKET_DURATION_MINUTES || 2) * 60 * 1000;
     const expiresAt = now + durationMs;
 
     const marketId = `market_${now}`;
-    const question = `Will BTC be above $${targetPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} in 5 minutes?`;
+    const question = `Will BTC be above $${targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in 2 minutes?`;
 
     const market = {
       id: marketId,
@@ -52,17 +52,17 @@ export async function recordEntry({ wallet, position, amount, txHash }) {
   const market = loadMarket();
   if (!market || market.status !== 'open') throw new Error('No active open market');
   if (Date.now() >= market.expiresAt) throw new Error('Market has expired');
-  
+
   const betAmount = parseFloat(amount);
   if (isNaN(betAmount) || betAmount < parseFloat(CONFIG.MIN_BET_USDC)) {
     throw new Error(`Minimum bet is ${CONFIG.MIN_BET_USDC} USDC`);
   }
 
   // Ensure agent wallet can cover 2x theoretical max payout
-  const maxPoolAfterBet = position === 'YES' 
+  const maxPoolAfterBet = position === 'YES'
     ? Math.max(market.yesPool + betAmount, market.noPool)
     : Math.max(market.yesPool, market.noPool + betAmount);
-    
+
   const canCover = await canAcceptBets(maxPoolAfterBet);
   if (!canCover) {
     throw new Error('Market paused - Agent wallet balance too low to cover current risk');
@@ -77,11 +77,11 @@ export async function recordEntry({ wallet, position, amount, txHash }) {
   } else {
     throw new Error('Position must be YES or NO');
   }
-  
+
   saveMarket(market);
 
   const bet = {
-    id: `bet_${Date.now()}_${Math.random().toString(36).substring(2,8)}`,
+    id: `bet_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
     wallet: wallet.toLowerCase(),
     marketId: market.id,
     position,
@@ -91,8 +91,8 @@ export async function recordEntry({ wallet, position, amount, txHash }) {
   };
   saveBet(bet);
 
-  console.log(`✅ Bet placed: ${wallet.slice(0,6)}... -> ${position} $${betAmount}`);
-  
+  console.log(`✅ Bet placed: ${wallet.slice(0, 6)}... -> ${position} $${betAmount}`);
+
   return { bet, market };
 }
 
@@ -111,11 +111,11 @@ export async function resolveMarket() {
     console.log(`\n🔍 Resolving Market: ${market.id}...`);
     const finalPrice = await getBTCPrice();
     const result = finalPrice > market.targetPrice ? 'YES' : 'NO';
-    
+
     market.finalPrice = finalPrice;
     market.result = result;
     market.status = 'resolved';
-    
+
     console.log(`   Final Price: $${finalPrice.toFixed(2)} -> ${result} WON`);
 
     const bets = loadBets();
@@ -126,40 +126,40 @@ export async function resolveMarket() {
     for (const winner of winners) {
       // DEEP AUDIT FIX #2: Strictly cap floating point math at 6 decimals to prevent RPC Rejection.
       const payoutAmount = Number((winner.stake * 2).toFixed(6));
-      console.log(`   💸 Payout: Paying winner ${winner.wallet.slice(0,8)}... -> $${payoutAmount.toFixed(2)}`);
-      
+      console.log(`   💸 Payout: Paying winner ${winner.wallet.slice(0, 8)}... -> $${payoutAmount.toFixed(2)}`);
+
       try {
         const tx = await payWinner(winner.wallet, payoutAmount);
         if (tx && !tx.startsWith('mock_tx')) {
-            console.log(`   ✅ Payout confirmed for ${winner.wallet.slice(0,8)}: ${tx}`);
-            payouts.push({
-              wallet: winner.wallet,
-              stake: winner.stake,
-              payout: payoutAmount,
-              txHash: tx,
-              status: "PAID"
-            });
+          console.log(`   ✅ Payout confirmed for ${winner.wallet.slice(0, 8)}: ${tx}`);
+          payouts.push({
+            wallet: winner.wallet,
+            stake: winner.stake,
+            payout: payoutAmount,
+            txHash: tx,
+            status: "PAID"
+          });
         } else if (tx && tx.startsWith('mock_tx')) {
-            console.error(`   ⚠️ Payout Simulated for ${winner.wallet.slice(0,8)}.`);
-             payouts.push({
-              wallet: winner.wallet,
-              stake: winner.stake,
-              payout: payoutAmount,
-              txHash: tx,
-              status: "SIMULATED"
-            });
+          console.error(`   ⚠️ Payout Simulated for ${winner.wallet.slice(0, 8)}.`);
+          payouts.push({
+            wallet: winner.wallet,
+            stake: winner.stake,
+            payout: payoutAmount,
+            txHash: tx,
+            status: "SIMULATED"
+          });
         } else {
-            console.error(`   ❌ Payout FAILED for ${winner.wallet.slice(0,8)}. No TX ID returned.`);
-            payouts.push({
-              wallet: winner.wallet,
-              stake: winner.stake,
-              payout: payoutAmount,
-              txHash: "FAILED_ONCHAIN",
-              status: "FAILED"
-            });
+          console.error(`   ❌ Payout FAILED for ${winner.wallet.slice(0, 8)}. No TX ID returned.`);
+          payouts.push({
+            wallet: winner.wallet,
+            stake: winner.stake,
+            payout: payoutAmount,
+            txHash: "FAILED_ONCHAIN",
+            status: "FAILED"
+          });
         }
       } catch (px) {
-        console.error(`   ❌ Payout logic crash for ${winner.wallet.slice(0,8)}:`, px.message);
+        console.error(`   ❌ Payout logic crash for ${winner.wallet.slice(0, 8)}:`, px.message);
         payouts.push({
           wallet: winner.wallet,
           stake: winner.stake,
@@ -174,10 +174,10 @@ export async function resolveMarket() {
       market.payouts = payouts;
       saveToHistory(market);
     }
-    
+
     // Clear active market to trigger new creation cycle
-    saveMarket(null); 
-    
+    saveMarket(null);
+
     broadcast({ type: 'MARKET_RESOLVED', market });
     return market;
   } finally {

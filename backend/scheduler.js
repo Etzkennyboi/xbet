@@ -2,13 +2,13 @@ import { createMarket, resolveMarket } from './agent.js';
 import { loadMarket } from './db.js';
 
 export async function startScheduler() {
-  console.log('⏰ Starting 5-minute Market Scheduler...');
-  
+  console.log('⏰ Starting 2-minute Market Scheduler...');
+
   // Continuous 5-second interval to check state
   setInterval(async () => {
     try {
       const market = loadMarket();
-      
+
       if (!market || market.status === 'resolved') {
         // Time to create a new market
         await createMarket();
