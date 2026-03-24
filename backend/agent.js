@@ -10,22 +10,34 @@ let isProcessing = false;
 /**
  * Creates a new prediction market for a given asset (BTC, ETH, SOL...)
  */
-export async function createMarket(symbol = 'BTC') {
+export async function createMarket(symbol = 'BTC', durationMinutes = CONFIG.MARKET_DURATION_MINUTES || 2) {
   if (isProcessing) return null;
   isProcessing = true;
   try {
     const startPrice = await getPrice(symbol);
-    const targetPrice = startPrice * (1 + (CONFIG.TARGET_PERCENT_UP || 0.005));
-    const now = Date.now();
-    const durationMs = (CONFIG.MARKET_DURATION_MINUTES || 2) * 60 * 1000;
-    const expiresAt = now + durationMs;
+    
+    let targetPercent = CONFIG.TARGET_PERCENT_UP || 0.005;
+    if (durationMinutes >= 60) targetPercent = 0.01;
+    if (durationMinutes >= 360) targetPercent = 0.02;
 
-    const marketId = `market_${symbol}_${now}`;
-    const question = `Will ${symbol} be above $${targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in ${CONFIG.MARKET_DURATION_MINUTES || 2} minutes?`;
+    const targetPrice = startPrice * (1 + targetPercent);
+    const now = Date.now();
+    const durationMs = durationMinutes * 60 * 1000;
+    const expiresAt = now + durationMs;
+    const nonce = Math.floor(Math.random() * 10000);
+
+    const marketId = `market_${symbol}_${durationMinutes}m_${now}_${nonce}`;
+    
+    let durationLabel = `${durationMinutes} minutes`;
+    if (durationMinutes === 60) durationLabel = `1 hour`;
+    if (durationMinutes === 360) durationLabel = `6 hours`;
+
+    const question = `Will ${symbol} be above $${targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in ${durationLabel}?`;
 
     const market = {
       id: marketId,
       symbol: symbol.toUpperCase(),
+      duration: durationMinutes,
       question,
       startPrice,
       targetPrice,

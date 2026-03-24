@@ -21,6 +21,8 @@ let selectedMarketId = null;
 let selectedPosition = null;
 let countdownTimer = null;
 let localHistory = [];
+let currentAssetFilter = 'ALL';
+let currentTimeFilter = 'ALL';
 
 const els = {
   connectBtn: document.getElementById('connect-wallet-btn'),
@@ -57,7 +59,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     const accounts = await window.ethereum.request({ method: 'eth_accounts' });
     if (accounts.length > 0) handleAccountsChanged(accounts);
   }
+
+  setupFilters();
 });
+
+function setupFilters() {
+  const assetBtns = document.querySelectorAll('#asset-filters .filter-btn');
+  const timeBtns = document.querySelectorAll('#time-filters .filter-btn');
+
+  assetBtns.forEach(btn => {
+    btn.onclick = () => {
+      assetBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentAssetFilter = btn.dataset.asset;
+      renderMarkets(activeMarkets);
+    };
+  });
+
+  timeBtns.forEach(btn => {
+    btn.onclick = () => {
+      timeBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentTimeFilter = btn.dataset.time;
+      renderMarkets(activeMarkets);
+    };
+  });
+}
 
 function setupWebSocket() {
   const wsUrl = window.location.protocol === 'https:' ? `wss://${window.location.host}` : `ws://${window.location.host}`;
@@ -204,10 +231,30 @@ function renderMarkets(markets) {
 
   const isConnected = !!currentAccount;
 
-  els.marketsContainer.innerHTML = markets.map(m => `
+  let filtered = [...markets];
+  if (currentAssetFilter !== 'ALL') {
+    filtered = filtered.filter(m => m.symbol === currentAssetFilter);
+  }
+  if (currentTimeFilter !== 'ALL') {
+    filtered = filtered.filter(m => m.duration === parseInt(currentTimeFilter));
+  }
+
+  // Sort: Symbols together, then by duration (2m, 60m, 360m)
+  const symbolsOrder = ['BTC', 'ETH', 'SOL'];
+  const sortedMarkets = filtered.sort((a, b) => {
+    if (a.symbol !== b.symbol) return symbolsOrder.indexOf(a.symbol) - symbolsOrder.indexOf(b.symbol);
+    return a.duration - b.duration;
+  });
+
+  if (sortedMarkets.length === 0) {
+    els.marketsContainer.innerHTML = '<div class="loading">No markets match these filters.</div>';
+    return;
+  }
+
+  els.marketsContainer.innerHTML = sortedMarkets.map(m => `
     <div class="market-card" id="card-${m.id}">
       <div class="live-price-badge">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; color: #6b7280;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; opacity: 0.6;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
         ${m.symbol}-USDC: <span id="price-${m.symbol}">...</span>
       </div>
       <div class="market-title">${m.question}</div>

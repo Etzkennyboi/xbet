@@ -10,7 +10,7 @@
   <div class="app-container">
     <header>
       <div class="logo">
-        <span class="title">◈ CRYPTOCALL</span>
+        <img src="logo.png?v=3" alt="CryptoCall" class="logo-img">
         <span class="sub">Powered by Onchain OS | X Layer Mainnet</span>
       </div>
       <button id="connect-wallet-btn" class="wallet-btn" onclick="connectWallet()">CONNECT WALLET</button>
@@ -19,6 +19,26 @@
     <main>
       <section class="panel">
         <h2>ACTIVE MARKETS</h2>
+        <div class="filters">
+          <div class="filter-group">
+            <span class="filter-label">Asset:</span>
+            <div class="filter-btns" id="asset-filters">
+              <button class="filter-btn active" data-asset="ALL">ALL</button>
+              <button class="filter-btn" data-asset="BTC">BTC</button>
+              <button class="filter-btn" data-asset="ETH">ETH</button>
+              <button class="filter-btn" data-asset="SOL">SOL</button>
+            </div>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Timeframe:</span>
+            <div class="filter-btns" id="time-filters">
+              <button class="filter-btn active" data-time="ALL">ALL</button>
+              <button class="filter-btn" data-time="2">2m</button>
+              <button class="filter-btn" data-time="60">1h</button>
+              <button class="filter-btn" data-time="360">6h</button>
+            </div>
+          </div>
+        </div>
         <div id="markets-container" class="markets-container">
           <div class="loading">
              Waiting for Agent to create markets...
