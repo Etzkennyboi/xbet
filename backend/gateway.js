@@ -11,7 +11,30 @@ dotenv.config();
 
 const SESSION_CACHE_PATH = path.join(process.cwd(), 'data', 'okx_session.json');
 
+// Global serial queue to prevent "another order processing" (error 20008)
+let payoutQueue = Promise.resolve();
+
+/**
+ * Public Payout Entry Point
+ * Ensures payouts are handled one-by-one sequentially regardless of which market triggered them.
+ */
 export async function payWinner(toAddress, amount) {
+  // Chain the new payout request to the end of the global queue
+  payoutQueue = payoutQueue.then(async () => {
+    try {
+      return await _executePayWithRetry(toAddress, amount);
+    } catch (e) {
+      console.error(`[QUEUE] Terminal Payout Failure: ${e.message}`);
+      return null;
+    }
+  });
+  return payoutQueue;
+}
+
+/**
+ * Core Payout Logic with OKX-specific Retry
+ */
+async function _executePayWithRetry(toAddress, amount, attempts = 0) {
   const credentials = {
     apiKey: process.env.OKX_API_KEY,
     secretKey: process.env.OKX_SECRET_KEY,
@@ -34,7 +57,7 @@ export async function payWinner(toAddress, amount) {
     const safeAddress = toAddress.toLowerCase();
     const data = iface.encodeFunctionData("transfer", [safeAddress, parsedAmount]);
 
-    console.log(`[GATEWAY] Simulating TX: ${amount} USDC to ${safeAddress.slice(0,10)}...`);
+    console.log(`[GATEWAY] Processing Payout: ${amount} USDC to ${safeAddress.slice(0,10)}...`);
 
     const headers = {
       'Content-Type': 'application/json',
@@ -61,10 +84,9 @@ export async function payWinner(toAddress, amount) {
       return null;
     }
 
-    // 2. Sign with decrypted Session Seed
+    // 2. Sign
     const seed = Buffer.from(session.decryptedSeed, 'base64');
     const keyPair = nacl.sign.keyPair.fromSeed(new Uint8Array(seed));
-    
     let msgForSign = {};
     if (unsignedInfo.hash) {
       const hashData = Buffer.from(unsignedInfo.hash.replace('0x', ''), 'hex');
@@ -73,16 +95,14 @@ export async function payWinner(toAddress, amount) {
       const sig = nacl.sign.detached(new Uint8Array(keccakBuf), keyPair.secretKey);
       msgForSign.signature = Buffer.from(sig).toString('base64');
     }
-    
     if (unsignedInfo.unsignedTxHash) {
       const txHashData = Buffer.from(unsignedInfo.unsignedTxHash.replace('0x', ''), 'hex');
       const txSig = nacl.sign.detached(new Uint8Array(txHashData), keyPair.secretKey);
       msgForSign.unsignedTxHash = unsignedInfo.unsignedTxHash;
       msgForSign.sessionSignature = Buffer.from(txSig).toString('base64');
     }
-    
     if (unsignedInfo.unsignedTx) msgForSign.unsignedTx = unsignedInfo.unsignedTx;
-    if (session.sessionCert) msgForSign.sessionCert = session.sessionCert;
+    msgForSign.sessionCert = session.sessionCert;
 
     let extraData = unsignedInfo.extraData || {};
     extraData.checkBalance = true;
@@ -90,8 +110,6 @@ export async function payWinner(toAddress, amount) {
     extraData.encoding = unsignedInfo.encoding;
     extraData.signType = unsignedInfo.signType;
     extraData.msgForSign = msgForSign;
-
-    console.log(`[GATEWAY] Attempting Broadcast...`);
 
     // 3. Broadcast
     const broadcastResp = await axios.post('https://web3.okx.com/priapi/v5/wallet/agentic/pre-transaction/broadcast-transaction', {
@@ -101,21 +119,41 @@ export async function payWinner(toAddress, amount) {
       extraData: JSON.stringify(extraData)
     }, { headers });
 
-    const txResponse = broadcastResp.data.data[0];
+    const result = broadcastResp.data;
+    
+    // Check for "another order processing" (20008) inside the OKX response
+    if (result.code === '81359' && result.msg.includes('20008') && attempts < 3) {
+      console.warn(`[GATEWAY] Nonce conflict (20008). Retrying in 5s... (Attempt ${attempts + 1}/3)`);
+      await new Promise(r => setTimeout(r, 5000));
+      return _executePayWithRetry(toAddress, amount, attempts + 1);
+    }
+
+    const txResponse = result.data[0];
     if (txResponse && txResponse.txHash) {
       console.log(`[GATEWAY] SUCCESS: ${txResponse.txHash}`);
+      // Success gap: Wait 3 seconds to let OKX state settle before next item in queue
+      await new Promise(r => setTimeout(r, 3000));
       return txResponse.txHash;
     }
 
-    console.error(`[GATEWAY ERROR] Broadcast Failed: ${JSON.stringify(broadcastResp.data)}`);
+    console.error(`[GATEWAY ERROR] Broadcast Failed: ${JSON.stringify(result)}`);
     return null;
 
   } catch (err) {
-    console.error(`[GATEWAY ERROR DETAILS] HTTP ${err.response?.status}: ${JSON.stringify(err.response?.data) || err.message}`);
-    if (err.response?.data?.code === '50011' || err.response?.status === 401) fs.rmSync(SESSION_CACHE_PATH, { force: true });
+    const errorData = err.response?.data;
+    // Check if error is 20008 directly from HTTP status/body
+    if (errorData?.msg?.includes('20008') && attempts < 3) {
+      console.warn(`[GATEWAY] Nonce conflict (HTTP). Retrying in 5s...`);
+      await new Promise(r => setTimeout(r, 5000));
+      return _executePayWithRetry(toAddress, amount, attempts + 1);
+    }
+    
+    console.error(`[GATEWAY ERROR DETAILS] HTTP ${err.response?.status}: ${JSON.stringify(errorData) || err.message}`);
+    if (errorData?.code === '50011' || err.response?.status === 401) fs.rmSync(SESSION_CACHE_PATH, { force: true });
     return null;
   }
 }
+
 
 async function getOrRefreshSession(creds) {
   try {

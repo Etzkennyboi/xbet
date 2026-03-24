@@ -206,22 +206,38 @@ function renderMarkets(markets) {
 
   els.marketsContainer.innerHTML = markets.map(m => `
     <div class="market-card" id="card-${m.id}">
-      <div class="live-price-badge">${m.symbol}-USDC: <span id="price-${m.symbol}">...</span></div>
+      <div class="live-price-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; color: #6b7280;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        ${m.symbol}-USDC: <span id="price-${m.symbol}">...</span>
+      </div>
       <div class="market-title">${m.question}</div>
       <div class="stats-grid">
-        <div class="stats-label">Start Price:</div>
-        <div class="stats-val">$${m.startPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-        <div class="stats-label">Target Price:</div>
-        <div class="stats-val">$${m.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-        <div class="stats-label">Time:</div>
-        <div class="stats-val time-left" id="time-${m.id}">--:--</div>
+        <div class="stat-item">
+          <span class="stats-label">Starting</span>
+          <span class="stats-val">$${m.startPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stats-label">Target</span>
+          <span class="stats-val">$${m.targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
+        <div class="stat-item" style="text-align: right;">
+          <span class="stats-label">Resolves in</span>
+          <span class="stats-val time-left" id="time-${m.id}">--:--</span>
+        </div>
       </div>
       <div class="action-buttons">
-        <button class="btn-yes" ${!isConnected ? 'disabled' : ''} onclick="openBetModal('${m.id}', 'YES')">YES ↑</button>
-        <button class="btn-no"  ${!isConnected ? 'disabled' : ''} onclick="openBetModal('${m.id}', 'NO')">NO ↓</button>
+        <button class="btn-yes" ${!isConnected ? 'disabled' : ''} onclick="openBetModal('${m.id}', 'YES')">
+          <span>Yes</span>
+          <span style="font-weight: 500; opacity: 0.9;">50¢</span>
+        </button>
+        <button class="btn-no"  ${!isConnected ? 'disabled' : ''} onclick="openBetModal('${m.id}', 'NO')">
+          <span>No</span>
+          <span style="font-weight: 500; opacity: 0.9;">50¢</span>
+        </button>
       </div>
     </div>
   `).join('');
+
 
   updatePriceUI();
 
