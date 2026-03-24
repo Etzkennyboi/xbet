@@ -1,53 +1,28 @@
 const express = require('express')
 const router = express.Router()
-const { verifyWallet, sendPayout } = require('../agent/verify')
-
-// In-memory bounty store (we upgrade to DB later)
-const bounties = [
-  {
-    id: 'bounty_001',
-    task: 'Complete a DEX swap on X Layer mainnet',
-    minVolume: 0.01,
-    reward: 0.01,
-    slots: 5,
-    claimed: [],
-    startTime: 1774100000000, // Fixed time in the past
-    deadline: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
-    active: true
-  }
-]
-
-const submissions = []
-const usedTxHashes = [] // Anti-fraud: prevent reuse of the same swap TX
+const db = require('../config/db')
+const { verifyBalance, verifyWallet, sendPayout } = require('../agent/verify')
 
 // GET all active bounties
 router.get('/bounties', (req, res) => {
-  const active = bounties.filter(b => b.active)
+  const active = db.getBounties()
   res.json({ success: true, bounties: active })
 })
 
 // POST submit wallet for verification
 router.post('/submit', async (req, res) => {
-  const { walletAddress, txHash, bountyId } = req.body
+  const { walletAddress, bountyId, txHash } = req.body
 
   // Basic validation
-  if (!walletAddress || !txHash || !bountyId) {
+  if (!walletAddress || !bountyId) {
     return res.status(400).json({ 
       success: false, 
-      message: 'walletAddress, txHash, and bountyId are required' 
+      message: 'walletAddress and bountyId are required' 
     })
   }
 
-  // 1. Check if TX Hash has already been used (SYSTEM-WIDE ANTI-FRAUD)
-  if (usedTxHashes.includes(txHash.toLowerCase())) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'This transaction has already been used to claim a bounty. Fraud detected.' 
-    })
-  }
-
-  // Find bounty
-  const bounty = bounties.find(b => b.id === bountyId)
+  // Find bounty first
+  const bounty = db.getBountyById(bountyId)
   if (!bounty || !bounty.active) {
     return res.status(404).json({ 
       success: false, 
@@ -56,7 +31,8 @@ router.post('/submit', async (req, res) => {
   }
 
   // Check if wallet already claimed
-  if (bounty.claimed.includes(walletAddress.toLowerCase())) {
+  const existingSub = db.getSubmissionByWallet(walletAddress, bountyId)
+  if (existingSub && existingSub.verdict === 'PASS') {
     return res.status(400).json({ 
       success: false, 
       message: 'Wallet already claimed this bounty' 
@@ -64,7 +40,7 @@ router.post('/submit', async (req, res) => {
   }
 
   // Check slots
-  if (bounty.claimed.length >= bounty.slots) {
+  if (bounty.claimedCount >= bounty.slots) {
     return res.status(400).json({ 
       success: false, 
       message: 'All bounty slots have been claimed' 
@@ -72,34 +48,35 @@ router.post('/submit', async (req, res) => {
   }
 
   try {
-    // Run AI verification with TX Hash
-    const result = await verifyWallet(walletAddress, txHash, bounty)
+    let result
+    if (bounty.task === 'swap') {
+      if (!txHash) return res.status(400).json({ success: false, message: 'txHash is required for swap bounties' })
+      result = await verifyWallet(walletAddress, txHash, bounty)
+    } else {
+      // Default to balance check if task is not swap
+      result = await verifyBalance(walletAddress, bounty)
+    }
 
     // Record submission
     const submission = {
-      id: `sub_${Date.now()}`,
       walletAddress,
-      txHash,
       bountyId,
       verdict: result.verdict,
       reason: result.reason,
-      timestamp: new Date().toISOString(),
+      reward: bounty.reward,
       payoutTx: null
     }
 
     if (result.verdict === 'PASS') {
-      // 2. MARK TX HASH AS USED (PERMANENTLY)
-      usedTxHashes.push(txHash.toLowerCase())
-
-      // Mark wallet as claimed
-      bounty.claimed.push(walletAddress.toLowerCase())
+      // Increment claim count
+      db.updateBountyClaim(bountyId)
       
       // Trigger payout
       const payoutTxHash = await sendPayout(walletAddress, bounty.reward)
       submission.payoutTx = payoutTxHash || 'PAYOUT_FAILED'
     }
 
-    submissions.push(submission)
+    db.addSubmission(submission)
 
     return res.json({
       success: true,
@@ -117,9 +94,14 @@ router.post('/submit', async (req, res) => {
   }
 })
 
+// GET leaderboard
+router.get('/leaderboard', (req, res) => {
+  res.json({ success: true, leaderboard: db.getLeaderboard() })
+})
+
 // GET all submissions (admin)
 router.get('/submissions', (req, res) => {
-  res.json({ success: true, submissions })
+  res.json({ success: true, submissions: db.getSubmissions() })
 })
 
 module.exports = router

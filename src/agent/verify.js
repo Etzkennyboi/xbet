@@ -87,9 +87,9 @@ async function getTxData(txHash) {
 }
 
 const { OpenAI } = require('openai')
-const openai = new OpenAI({
-    apiKey: config.deepseek.apiKey,
-    baseURL: config.deepseek.baseUrl
+const client = new OpenAI({
+    baseURL: config.deepseek.baseUrl || "https://integrate.api.nvidia.com/v1",
+    apiKey: config.deepseek.apiKey
 })
 
 async function askDeepSeekToVerify(walletAddress, bounty, txData) {
@@ -130,13 +130,16 @@ REASON: [one concise sentence explaining your logic. You MUST mention if the wal
   console.log('------------------------------')
 
   try {
-    const response = await openai.chat.completions.create({
+    const completion = await client.chat.completions.create({
       model: "deepseek-ai/deepseek-v3.2",
       messages: [{ role: "user", content: prompt }],
-      temperature: 0
+      temperature: 1,
+      top_p: 0.95,
+      max_tokens: 8192,
+      extra_body: { "chat_template_kwargs": { "thinking": true } }
     })
 
-    const text = response.choices[0].message.content
+    const text = completion.choices[0].message.content
     console.log('\n--- REASON FROM AI ---')
     console.log(text)
     console.log('----------------------\n')
@@ -190,14 +193,49 @@ async function verifyWallet(walletAddress, txHash, bounty) {
   return await askDeepSeekToVerify(walletAddress, bounty, txData)
 }
 
-async function sendPayout(walletAddress, amount) {
-  const usdtAddress = "0x1e4a5963abfd975d8c9021ce480b42188849d41d"
+// ── BALANCE VERIFICATION (for "Hold $1" bounty) ──────────────────────
+async function verifyBalance(walletAddress, bounty) {
+  console.log(`\n💰 Verifying full X Layer portfolio for: ${walletAddress}`)
+  
   try {
-    const result = await runOnchainos(`wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdtAddress}" --force`)
+    // We use the Onchain OS Portfolio tool - the source of truth for OKX wallet data
+    // This automatically handles native OKB + all ERC-20s + DeFi at real-time prices
+    const result = await runOnchainos(`portfolio total-value --address ${walletAddress} --chains xlayer --asset-type 0`)
+    
+    if (!result || !result[0]) {
+      throw new Error('Portfolio service returned no data.')
+    }
+
+    const totalValueUsd = parseFloat(result[0].totalValue || 0)
+    console.log(`  Total X Layer Portfolio Value: ~$${totalValueUsd.toFixed(2)}`)
+
+    if (totalValueUsd >= (bounty.minBalance || 1)) {
+      return {
+        verdict: 'PASS',
+        reason: `Wallet verified with a total X Layer value of ~$${totalValueUsd.toFixed(2)}. Requirement met.`
+      }
+    } else {
+      return {
+        verdict: 'FAIL',
+        reason: `Wallet only holds ~$${totalValueUsd.toFixed(2)} on X Layer (including native assets and tokens). Minimum $${bounty.minBalance || 1} required.`
+      }
+    }
+  } catch (err) {
+    console.error('Portfolio Verification error:', err.message)
+    return { verdict: 'FAIL', reason: 'High-level portfolio check failed. Ensure your wallet has active assets on X Layer Mainnet.' }
+  }
+}
+
+async function sendPayout(walletAddress, amount) {
+  const usdcAddress = "0x74b7f16337b8972027f6196a17a631ac6de26d22" // X Layer Mainnet USDC
+  try {
+    // Adding --from config.agent.walletAddress ensures we use the funded wallet
+    const agentAddress = config.agent.walletAddress
+    const result = await runOnchainos(`wallet send --chain 196 --amount "${amount}" --receipt "${walletAddress}" --contract-token "${usdcAddress}" --from "${agentAddress}" --force`)
     return result && result.txHash ? result.txHash : null
   } catch (err) {
     return null
   }
 }
 
-module.exports = { verifyWallet, sendPayout }
+module.exports = { verifyWallet, verifyBalance, sendPayout }

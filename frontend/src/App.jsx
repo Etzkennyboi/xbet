@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
+import { Routes, Route, Link } from 'react-router-dom'
+import Navbar from './components/Navbar'
+import BountyCard from './components/BountyCard'
+import BountyDetail from './components/BountyDetail'
+import Leaderboard from './components/Leaderboard'
+import { Zap, Activity, ShieldCheck, Globe } from 'lucide-react'
 
 function App() {
   const [bounties, setBounties] = useState([])
-  const [walletMap, setWalletMap] = useState({})
-  const [txHashMap, setTxHashMap] = useState({})
-  const [statusMap, setStatusMap] = useState({})
+  const [connectedAddress, setConnectedAddress] = useState(null)
+  const [isConnecting, setIsConnecting] = useState(false)
+  const [activities, setActivities] = useState([])
   
-  // Use relative path for production (served from same origin)
-  // Use VITE_API_URL or localhost for development
   const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:3001/api')
 
   useEffect(() => {
@@ -19,138 +23,88 @@ function App() {
         }
       })
       .catch(err => console.error("Failed to fetch bounties: ", err))
-  }, [])
 
-  const handleInputChange = (id, value) => {
-    setWalletMap(prev => ({ ...prev, [id]: value }))
-  }
-
-  const handleTxHashChange = (id, value) => {
-    setTxHashMap(prev => ({ ...prev, [id]: value }))
-  }
-
-  const submitBounty = async (bountyId) => {
-    const address = walletMap[bountyId]
-    const txHash = txHashMap[bountyId]
-    if (!address || !txHash) return
-    
-    setStatusMap(prev => ({ ...prev, [bountyId]: { type: 'loading', msg: 'AI Agent is verifying your on-chain data...' } }))
-
-    try {
-      const response = await fetch(`${API_URL}/submit`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ walletAddress: address, txHash, bountyId })
+    // Fetch initial leaderboard for "Live Activity" simulation
+    fetch(`${API_URL}/leaderboard`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setActivities(data.leaderboard.slice(0, 5))
+        }
       })
 
-      const result = await response.json()
-      
-      if (result.success && result.verdict === 'PASS') {
-        setStatusMap(prev => ({ 
-          ...prev, 
-          [bountyId]: { 
-            type: 'success', 
-            msg: result.reason,
-            txHash: result.submission.payoutTx
-          } 
-        }))
-      } else {
-        setStatusMap(prev => ({ 
-          ...prev, 
-          [bountyId]: { type: 'error', msg: result.message || result.reason } 
-        }))
-      }
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        setConnectedAddress(accounts[0] || null)
+      })
+    }
+  }, [API_URL])
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      alert("Please install OKX Wallet or MetaMask.")
+      return
+    }
+    setIsConnecting(true)
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
+      setConnectedAddress(accounts[0])
     } catch (err) {
-      setStatusMap(prev => ({ 
-        ...prev, 
-        [bountyId]: { type: 'error', msg: 'Network error communicating with the agent.' } 
-      }))
+      console.error(err)
+    } finally {
+      setIsConnecting(false)
     }
   }
 
-  return (
-    <div className="app-container">
-      <header className="header">
-        <div className="logo">XBounty</div>
-        <div style={{ color: 'var(--text-muted)' }}>Powered by X Layer & AI</div>
-      </header>
-
-      <main>
-        <div className="hero">
-          <h1>Smart Bounties.<br/>Verified autonomously.</h1>
-          <p>Complete on-chain tasks, submit your wallet, and let our AI agent instantly verify and autonomously send your payout.</p>
+  const HomePage = () => (
+    <main>
+      <div className="hero">
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0, 255, 136, 0.1)', color: 'var(--accent-primary)', padding: '0.5rem 1rem', borderRadius: '50px', fontSize: '0.8rem', fontWeight: 600, marginBottom: '1.5rem', border: '1px solid rgba(0, 255, 136, 0.2)' }}>
+          <Zap size={14} /> BUILT FOR X LAYER MAINNET
         </div>
+        <h1>Autonomous Onchain<br/>Task Marketplace</h1>
+        <p>Complete decentralized tasks. Verified by AI. Paid in USDC instantly.</p>
+      </div>
 
-        <div className="bounty-grid">
-          {bounties.map((bounty) => (
-            <div className="bounty-card" key={bounty.id}>
-              <div className="bounty-header">
-                <span className="bounty-id">#{bounty.id.split('_')[1]}</span>
-                <span className="bounty-reward">{bounty.reward} USDT</span>
-              </div>
-              
-              <h3 className="bounty-task">{bounty.task}</h3>
-              
-              <div className="bounty-meta">
-                <div className="meta-item">
-                  <span title="Volume Req">💰</span> &ge; ${bounty.minVolume}
-                </div>
-                <div className="meta-item">
-                  <span title="Slots">👥</span> {bounty.slots - bounty.claimed.length} / {bounty.slots} slots
-                </div>
-              </div>
-
-              <div className="submission-form">
-                <input 
-                  type="text" 
-                  className="input-field"
-                  placeholder="0xYourWalletAddress..." 
-                  value={walletMap[bounty.id] || ''}
-                  onChange={(e) => handleInputChange(bounty.id, e.target.value)}
-                />
-                <input 
-                  type="text" 
-                  className="input-field"
-                  style={{ marginTop: '0.5rem' }}
-                  placeholder="0xYourSwapTxHash..." 
-                  value={txHashMap[bounty.id] || ''}
-                  onChange={(e) => handleTxHashChange(bounty.id, e.target.value)}
-                />
-                
-                <button 
-                  className="submit-btn" 
-                  onClick={() => submitBounty(bounty.id)}
-                  disabled={statusMap[bounty.id]?.type === 'loading' || !walletMap[bounty.id] || !txHashMap[bounty.id]}
-                >
-                  {statusMap[bounty.id]?.type === 'loading' ? <span className="loading-spinner"></span> : 'Submit & Verify'}
-                </button>
-
-                {statusMap[bounty.id] && statusMap[bounty.id].type !== 'loading' && (
-                  <div className={`alert ${statusMap[bounty.id].type}`}>
-                    <span>{statusMap[bounty.id].msg}</span>
-                    {statusMap[bounty.id].txHash && statusMap[bounty.id].txHash !== 'PAYOUT_FAILED' && (
-                      <a 
-                        className="alert-link" 
-                        href={`https://www.oklink.com/xlayer/tx/${statusMap[bounty.id].txHash}`} 
-                        target="_blank" 
-                        rel="noreferrer"
-                      >
-                        View Payout →
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+      <section style={{ marginTop: '2rem' }}>
+        <h2 style={{ fontSize: '1.75rem', marginBottom: '2.5rem', textAlign: 'center', opacity: 0.9 }}>
+          Onchain Marketplace
+        </h2>
+        <div className="bounty-grid" style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(3, 1fr)', 
+          gap: '2.5rem' 
+        }}>
+          {bounties.slice(0, 9).map(bounty => (
+            <BountyCard key={bounty.id} bounty={bounty} />
           ))}
-
-          {bounties.length === 0 && (
-            <div style={{ color: 'var(--text-muted)', textAlign: 'center', gridColumn: '1 / -1', padding: '3rem' }}>
-              No active bounties available at the moment.
-            </div>
-          )}
         </div>
-      </main>
+      </section>
+    </main>
+  )
+
+  return (
+    <div className="app">
+      <Navbar 
+        connectedAddress={connectedAddress} 
+        connectWallet={connectWallet} 
+        isConnecting={isConnecting} 
+      />
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route 
+          path="/bounty/:id" 
+          element={<BountyDetail connectedAddress={connectedAddress} API_URL={API_URL} />} 
+        />
+        <Route 
+          path="/leaderboard" 
+          element={<Leaderboard API_URL={API_URL} />} 
+        />
+      </Routes>
+      
+      <footer style={{ marginTop: '5rem', padding: '3rem 2rem', borderTop: '1px solid var(--border-color)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+        XBounty V2 MVP • Powered by X Layer & DeepSeek
+      </footer>
     </div>
   )
 }
