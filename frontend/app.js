@@ -100,7 +100,7 @@ function setupWebSocket() {
       }
       if (data.type === 'MARKET_UPDATED' || data.type === 'MARKET_RESOLVING') {
         fetchMarket();
-        if (data.type === 'MARKET_UPDATED') fetchBets();
+        fetchBets();
       }
       fetchAgentWallet();
     } catch (e) { }
@@ -312,12 +312,20 @@ function renderBets(bets) {
   bets.sort((a, b) => b.timestamp - a.timestamp);
   els.betsTbody.innerHTML = bets.map(b => {
     const resolved = localHistory.find(h => h.id === b.marketId);
+    const active = activeMarkets.find(m => m.id === b.marketId);
+    const m = resolved || active;
+
     let statusHtml = '<span class="status-pending">⏳ PENDING</span>';
     let rowClass = "";
-    if (resolved) {
-      const won = resolved.result === b.position;
-      statusHtml = won ? `<span class="status-won">💰 WON</span>` : `<span class="status-lost">❌ LOST</span>`;
-      rowClass = won ? "row-won" : "row-lost";
+
+    if (m && (m.status === 'resolved' || m.status === 'resolving' || resolved)) {
+      if (m.result) {
+        const won = m.result === b.position;
+        statusHtml = won ? `<span class="status-won">💰 WON</span>` : `<span class="status-lost">❌ LOST</span>`;
+        rowClass = won ? "row-won" : "row-lost";
+      } else {
+        statusHtml = `<span class="status-pending" style="color: #ff9800;">⌛ RESOLVING</span>`;
+      }
     }
     const marketSymbol = b.marketId.split('_')[1] || "BTC";
     return `
