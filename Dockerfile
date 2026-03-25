@@ -1,6 +1,15 @@
 # Use an official Node.js runtime as a parent image
 FROM node:20-slim
 
+# Install system dependencies (curl and ca-certificates are required for onchainos installer)
+RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Install onchainos (OKX Onchain OS CLI)
+RUN curl -sSL "https://raw.githubusercontent.com/okx/onchainos-skills/main/install.sh" | sh
+
+# Add onchainos to path (default install location is ~/.local/bin)
+ENV PATH="/root/.local/bin:${PATH}"
+
 # Set working directory
 WORKDIR /app
 
@@ -15,14 +24,10 @@ COPY src ./src
 COPY frontend ./frontend
 WORKDIR /app/frontend
 RUN npm install
-# Ensure we build the frontend - we need the dist folder
 RUN npm run build
 
 # Go back to root
 WORKDIR /app
-
-# Ensure we have the .env variables or set them in the environment
-# ENV PORT=3001
 
 # Expose the API port
 EXPOSE 3001

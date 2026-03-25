@@ -5,7 +5,12 @@ const util = require('util')
 const path = require('path')
 
 const execAsync = util.promisify(exec)
-const onchainosPath = path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
+
+// Determine the correct onchainos path based on host system (Windows vs Linux)
+const IS_WIN = process.platform === 'win32'
+const onchainosPath = IS_WIN 
+  ? path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
+  : 'onchainos' // Installed via script on Linux
 
 // RPC Source of Truth (Zero API Key Required)
 const provider = new ethers.JsonRpcProvider('https://rpc.xlayer.tech')
