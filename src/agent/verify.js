@@ -9,7 +9,7 @@ const execAsync = util.promisify(exec)
 // Determine the correct onchainos path based on host system (Windows vs Linux)
 const IS_WIN = process.platform === 'win32'
 const onchainosPath = IS_WIN 
-  ? path.join(process.env.USERPROFILE, '.local', 'bin', 'onchainos.exe')
+  ? path.join(process.env.USERPROFILE || '', '.local', 'bin', 'onchainos.exe')
   : 'onchainos' // Installed via script on Linux
 
 // RPC Source of Truth (Zero API Key Required)
