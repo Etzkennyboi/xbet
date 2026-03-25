@@ -88,8 +88,6 @@ export async function resolveMarket(marketId) {
     market.finalPrice = finalPrice;
     market.result = result;
     market.status = 'resolved';
-    updateMarket(market); 
-    broadcast({ type: 'MARKET_UPDATED', market });
 
     console.log(`   Final Price: $${finalPrice.toFixed(2)} -> ${result} WON`);
 
@@ -118,8 +116,7 @@ export async function resolveMarket(marketId) {
       }
       
       market.payouts = payouts;
-      updateMarket(market); 
-      broadcast({ type: 'MARKET_UPDATED', market });
+      updateMarket(market); // Update locally 
     }
 
     saveToHistory(market);
