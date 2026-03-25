@@ -1,0 +1,11 @@
+[dotenv@17.3.1] injecting env (4) from .env -- tip: 🛡️ auth for agents: https://vestauth.com
+XBounty backend running on port 3001
+Agent wallet: 0x1ef1034e7cd690b40a329bd64209ce563f95bb5c
+
+Starting Verification for Wallet: 0x5C67869272f3d167c761dBbf0DC3901a1fF214D3
+Submitted TX Hash: 0x100010f46455f8ae9ab11a3a77010abc7763a32fe880d046283fd6771b3d12b1
+📡 Fetching pure X Layer blockchain data for TX: 0x100010f46455f8ae9ab11a3a77010abc7763a32fe880d046283fd6771b3d12b1...
+
+Starting Verification for Wallet: 0x5C67869272f3d167c761dBbf0DC3901a1fF214D3
+Submitted TX Hash: 0x100010f46455f8ae9ab11a3a77010abc7763a32fe880d046283fd6771b3d12b1
+📡 Fetching pure X Layer blockchain data for TX: 0x100010f46455f8ae9ab11a3a77010abc7763a32fe880d046283fd6771b3d12b1...

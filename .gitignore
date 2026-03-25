@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules/
 .env
 *.log
@@ -8,3 +9,14 @@ data/
 
 .vercel
 
+=======
+.env
+node_modules/
+frontend/node_modules/
+frontend/dist/
+dist/
+*.log
+.DS_Store
+.idea/
+.vscode/
+>>>>>>> 085eac40714c874d43f20d6df62345631223d861

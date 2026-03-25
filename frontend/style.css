@@ -521,3 +521,95 @@ tr:last-child td { border-bottom: none; }
 }
 
 .tx-status.error { color: var(--no-color); }
+
+/* --- RESPONSIVE OPTIMIZATION --- */
+
+@media (max-width: 1024px) {
+  .markets-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 10px 10px 40px 10px;
+  }
+
+  header {
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .logo {
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .logo .sub {
+    max-width: 100%;
+    margin-top: 0;
+  }
+
+  .wallet-btn {
+    width: 100%;
+  }
+
+  .filters {
+    padding: 12px;
+    gap: 16px;
+  }
+
+  .filter-group {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .filter-btns {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .markets-container {
+    grid-template-columns: 1fr;
+  }
+
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    min-width: 500px;
+  }
+
+  .modal-content {
+    padding: 24px;
+    margin: 10px;
+  }
+
+  .modal-title {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .market-title {
+    font-size: 1.15rem;
+  }
+
+  .action-buttons button {
+    font-size: 0.95rem;
+    padding: 12px;
+  }
+
+  .stats-val {
+    font-size: 1rem;
+  }
+}
+
