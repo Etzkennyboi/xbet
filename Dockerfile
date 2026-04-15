@@ -17,7 +17,8 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install
 
-# Copy backend source
+# Copy config and backend source
+COPY config.js ./
 COPY backend ./backend
 
 # Copy frontend
