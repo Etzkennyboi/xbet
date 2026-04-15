@@ -1,51 +1,32 @@
 {
-<<<<<<< HEAD
-  "name": "cryptocall-production",
-  "version": "1.0.0",
-  "description": "AI-powered prediction market on X Layer - Production",
-  "type": "module",
-  "scripts": {
-    "start": "node backend/server.js",
-    "dev": "node backend/server.js",
-    "deploy:contract": "npx hardhat run scripts/deploy.js --network xlayer",
-    "compile": "npx hardhat compile",
-    "test": "npx hardhat test"
-  },
-  "dependencies": {
-    "@hpke/core": "^1.9.0",
-    "@vercel/kv": "^3.0.0",
-    "axios": "^1.6.0",
-    "dotenv": "^16.3.1",
-    "ethers": "^5.7.2",
-    "express": "^4.18.2",
-    "node-cron": "^3.0.3",
-    "openai": "^4.20.0",
-    "tweetnacl": "^1.0.3",
-    "ws": "^8.14.2"
-=======
   "name": "xbounty",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI-powered prediction market and bridge operations on X Layer",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node src/index.js",
     "build": "cd frontend && npm install && npm run build",
-    "postinstall": "echo 'Root and frontend install skipped manually to save time unless building'",
+    "deploy:contract": "npx hardhat run scripts/deploy.js --network xlayer",
+    "compile": "npx hardhat compile",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "@vercel/kv": "^3.0.0",
     "axios": "^1.13.6",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "ethers": "^6.16.0",
     "express": "^5.2.1",
+    "node-cron": "^3.0.3",
     "openai": "^6.32.0",
+    "tweetnacl": "^1.0.3",
+    "ws": "^8.14.2",
     "x402": "^1.1.0",
     "x402-express": "^1.1.0"
->>>>>>> 085eac40714c874d43f20d6df62345631223d861
   }
 }

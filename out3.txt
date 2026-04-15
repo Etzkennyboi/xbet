@@ -1,1 +1,0 @@
-[GATEWAY ERROR DETAILS] HTTP undefined: bad address checksum (argument="address", value="0x5c67869272f3d167c761dBbf0DC3901a1fF214D3", code=INVALID_ARGUMENT, version=address/5.8.0) (argument="to", value="0x5c67869272f3d167c761dBbf0DC3901a1fF214D3", code=INVALID_ARGUMENT, version=abi/5.8.0)

@@ -1,155 +1,241 @@
-import { getPrice } from './market-api.js';
 import { payWinner } from './gateway.js';
 import { canAcceptBets } from './wallet-api.js';
 import { broadcast } from './server.js';
 import { loadMarkets, saveMarkets, saveBet, loadBets, clearBets, saveToHistory, addMarket, updateMarket, removeMarket } from './db.js';
 import { CONFIG } from '../config.js';
+import { fetchPolymarketMarkets, selectBestMarket, calculateMarketMetrics } from './polymarket-api.js';
+import { resolveMarketWithAI, canResolveMarket } from './ai-resolver.js';
 
 let isProcessing = false;
 
 /**
- * Creates a new prediction market for a given asset (BTC, ETH, SOL...)
+ * Creates a new prediction market based on a real Polymarket question
+ * Pulled from live Polymarket data and resolved by AI
  */
-export async function createMarket(symbol = 'BTC', durationMinutes = CONFIG.MARKET_DURATION_MINUTES || 2) {
+export async function createMarketFromPolymarket() {
   if (isProcessing) return null;
   isProcessing = true;
+  
   try {
-    const startPrice = await getPrice(symbol);
+    console.log('\n🔍 Fetching markets from Polymarket...');
     
-    let targetPercent = CONFIG.TARGET_PERCENT_UP || 0.005;
-    if (durationMinutes >= 60) targetPercent = 0.01;
-    if (durationMinutes >= 360) targetPercent = 0.02;
-
-    const targetPrice = startPrice * (1 + targetPercent);
+    // Fetch active markets from Polymarket
+    const markets = await fetchPolymarketMarkets(10, true);
+    
+    if (!markets || markets.length === 0) {
+      console.log('   ⚠️ No markets available from Polymarket, using fallback');
+      return null;
+    }
+    
+    // Select the best market (highest liquidity)
+    const selectedMarket = selectBestMarket(markets);
+    
+    if (!selectedMarket) {
+      console.log('   ⚠️ Could not select a market');
+      return null;
+    }
+    
+    const metrics = calculateMarketMetrics(selectedMarket);
+    
+    // Create a unique market ID for our platform
     const now = Date.now();
-    const durationMs = durationMinutes * 60 * 1000;
-    const expiresAt = now + durationMs;
-    const nonce = Math.floor(Math.random() * 10000);
-
-    const marketId = `market_${symbol}_${durationMinutes}m_${now}_${nonce}`;
+    const marketId = `pm_${selectedMarket.id}_${now}`;
     
-    let durationLabel = `${durationMinutes} minutes`;
-    if (durationMinutes === 60) durationLabel = `1 hour`;
-    if (durationMinutes === 360) durationLabel = `6 hours`;
-
-    const question = `Will ${symbol} be above $${targetPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in ${durationLabel}?`;
-
+    // Calculate expiry date (use Polymarket's end date or default to 30 days)
+    const endDate = new Date(selectedMarket.endDate);
+    const expiresAt = endDate.getTime();
+    
+    // Check if market hasn't already expired
+    if (expiresAt <= now) {
+      console.log(`   ⚠️ Selected market already expired, skipping`);
+      return null;
+    }
+    
     const market = {
       id: marketId,
-      symbol: symbol.toUpperCase(),
-      duration: durationMinutes,
-      question,
-      startPrice,
-      targetPrice,
-      startTime: now,
-      expiresAt,
+      polymarketId: selectedMarket.id,
+      polymarketConditionId: selectedMarket.conditionId,
+      question: selectedMarket.question,
+      description: selectedMarket.description,
+      image: selectedMarket.image,
+      category: selectedMarket.category,
+      liquidity: selectedMarket.liquidity,
+      expiresAt: expiresAt,
+      endDate: selectedMarket.endDate,
       status: 'open',
       yesPool: 0,
       noPool: 0,
       yesCount: 0,
-      noCount: 0
+      noCount: 0,
+      source: 'polymarket',
+      metrics: metrics
     };
-
+    
     addMarket(market);
-    // clearBets(); // DISABLED: Clearing bets is now per market resolution if needed, but bets are stored with marketId anyway
-
-    console.log(`\n🆕 New ${symbol} Market Created: ${marketId}`);
-    console.log(`   ${question}`);
-    console.log(`   Closes at: ${new Date(expiresAt).toLocaleTimeString()}`);
-
+    
+    console.log(`\n🆕 NEW POLYMARKET-STYLE MARKET CREATED`);
+    console.log(`   ID: ${marketId}`);
+    console.log(`   Question: ${market.question}`);
+    console.log(`   Category: ${market.category}`);
+    console.log(`   Original Liquidity: $${parseFloat(market.liquidity || '0').toLocaleString()}`);
+    console.log(`   Expires: ${new Date(expiresAt).toLocaleString()} (${metrics.daysRemaining}d ${metrics.hoursRemaining}h)`);
+    console.log(`   Resolution: AI-powered`);
+    
     broadcast({ type: 'NEW_MARKET', market });
     return market;
+    
+  } catch (err) {
+    console.error(`   ❌ Error creating market: ${err.message}`);
+    return null;
   } finally {
     isProcessing = false;
   }
 }
 
 /**
- * Resolves a specific market by ID
+ * Resolves a specific market by ID using AI
  */
 export async function resolveMarket(marketId) {
   if (isProcessing) return null;
   isProcessing = true;
+  
   try {
     const markets = loadMarkets();
     const market = markets.find(m => m.id === marketId);
     
-    if (!market || (market.status !== 'open' && market.status !== 'resolving')) return null;
-    if (Date.now() < market.expiresAt) return null;
-
+    if (!market || (market.status !== 'open' && market.status !== 'resolving')) {
+      console.log(`   ⚠️ Market ${marketId} not found or not in open/resolving status`);
+      return null;
+    }
+    
+    // Check if market is ready for resolution
+    const validation = canResolveMarket({
+      endDate: market.endDate,
+      expiresAt: market.expiresAt
+    });
+    
+    if (!validation.canResolve) {
+      console.log(`   ⏳ Market not yet ready for resolution: ${validation.reason}`);
+      return null;
+    }
+    
     market.status = 'resolving';
     updateMarket(market);
     broadcast({ type: 'MARKET_RESOLVING', market });
-
-    console.log(`\n🔍 Resolving ${market.symbol} Market: ${market.id}...`);
-    const finalPrice = await getPrice(market.symbol);
-    const result = finalPrice > market.targetPrice ? 'YES' : 'NO';
-
-    market.finalPrice = finalPrice;
+    
+    console.log(`\n🔍 AI Resolving Market: ${market.id}...`);
+    console.log(`   Question: ${market.question}`);
+    
+    // Use AI to resolve the market
+    const aiResolution = await resolveMarketWithAI({
+      id: market.id,
+      question: market.question,
+      description: market.description,
+      endDate: market.endDate,
+      category: market.category
+    });
+    
+    if (aiResolution.outcome === 'UNRESOLVED' || aiResolution.error) {
+      console.log(`   ⚠️ AI could not resolve market: ${aiResolution.reasoning}`);
+      market.status = 'open';
+      updateMarket(market);
+      return null;
+    }
+    
+    const result = aiResolution.outcome; // 'YES' or 'NO'
+    
     market.result = result;
     market.status = 'resolved';
-
-    console.log(`   Final Price: $${finalPrice.toFixed(2)} -> ${result} WON`);
-
-    const bets = loadBets(market.id); // Load bets ONLY for this market
+    market.aiResolution = {
+      outcome: aiResolution.outcome,
+      confidence: aiResolution.confidence,
+      reasoning: aiResolution.reasoning,
+      resolvedAt: Date.now()
+    };
+    
+    console.log(`   ✅ Market Resolved: ${result} WINS`);
+    console.log(`   🤖 AI Confidence: ${(aiResolution.confidence * 100).toFixed(1)}%`);
+    
+    // Process payouts
+    const bets = loadBets(market.id);
     const winners = bets.filter(b => b.position === result);
-    let payouts = [];
-
-    for (const winner of winners) {
-      const payoutAmount = Number((winner.stake * 2).toFixed(6));
-      console.log(`   💸 Payout: Paying winner ${winner.wallet.slice(0, 8)}... -> $${payoutAmount.toFixed(2)}`);
-
-      try {
-        const tx = await payWinner(winner.wallet, payoutAmount);
-        if (tx) {
-          console.log(`   ✅ Payout confirmed: ${tx}`);
-          payouts.push({
-            wallet: winner.wallet,
-            stake: winner.stake,
-            payout: payoutAmount,
-            txHash: tx,
-            status: tx.startsWith('mock_') ? "SIMULATED" : "PAID"
-          });
-        }
-      } catch (px) {
-        console.error(`   ❌ Payout crash:`, px.message);
-      }
+    const payouts = [];
+    
+    if (winners.length > 0) {
+      console.log(`   💸 Processing ${winners.length} winning payouts...`);
       
-      market.payouts = payouts;
-      updateMarket(market); // Update locally 
+      for (const winner of winners) {
+        const payoutAmount = Number((winner.stake * 2).toFixed(6));
+        console.log(`      → ${winner.wallet.slice(0, 8)}... : $${payoutAmount.toFixed(2)}`);
+        
+        try {
+          const tx = await payWinner(winner.wallet, payoutAmount);
+          if (tx) {
+            payouts.push({
+              wallet: winner.wallet,
+              stake: winner.stake,
+              payout: payoutAmount,
+              txHash: tx,
+              status: tx.startsWith('mock_') ? "SIMULATED" : "PAID"
+            });
+          }
+        } catch (px) {
+          console.error(`      ❌ Payout failed:`, px.message);
+        }
+      }
+    } else {
+      console.log(`   ℹ️ No winners for this market`);
     }
-
+    
+    market.payouts = payouts;
+    
     saveToHistory(market);
-    removeMarket(market.id); // Remove from active list
-
+    removeMarket(market.id);
+    
     broadcast({ type: 'MARKET_RESOLVED', market });
+    
+    console.log(`\n✅ Market ${market.id} fully resolved and archived`);
     return market;
+    
+  } catch (err) {
+    console.error(`   ❌ Error resolving market: ${err.message}`);
+    return null;
   } finally {
     isProcessing = false;
   }
 }
 
+/**
+ * Record a bet entry for a market
+ */
 export async function recordEntry({ wallet, position, amount, txHash, marketId }) {
   const markets = loadMarkets();
   const market = marketId ? markets.find(m => m.id === marketId) : markets[0];
   
-  if (!market || market.status !== 'open') throw new Error('No active open market');
-  if (Date.now() >= market.expiresAt) throw new Error('Market has expired');
-
+  if (!market || market.status !== 'open') {
+    throw new Error('No active open market');
+  }
+  
+  if (Date.now() >= market.expiresAt) {
+    throw new Error('Market has expired');
+  }
+  
   const betAmount = parseFloat(amount);
   if (isNaN(betAmount) || betAmount < parseFloat(CONFIG.MIN_BET_USDC)) {
     throw new Error(`Minimum bet is ${CONFIG.MIN_BET_USDC} USDC`);
   }
-
+  
+  // Check if agent can cover potential payouts
   const maxPoolAfterBet = position === 'YES'
     ? Math.max(market.yesPool + betAmount, market.noPool)
     : Math.max(market.yesPool, market.noPool + betAmount);
-
+  
   const canCover = await canAcceptBets(maxPoolAfterBet);
   if (!canCover) {
     throw new Error('Market paused - Agent wallet balance too low to cover current risk');
   }
-
+  
+  // Update market pools
   if (position === 'YES') {
     market.yesPool += betAmount;
     market.yesCount += 1;
@@ -157,9 +243,10 @@ export async function recordEntry({ wallet, position, amount, txHash, marketId }
     market.noPool += betAmount;
     market.noCount += 1;
   }
-
+  
   updateMarket(market);
-
+  
+  // Save bet
   const bet = {
     id: `bet_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
     wallet: wallet.toLowerCase(),
@@ -169,9 +256,51 @@ export async function recordEntry({ wallet, position, amount, txHash, marketId }
     txHash,
     timestamp: Date.now()
   };
+  
   saveBet(bet);
-
-  console.log(`✅ Bet (${market.symbol}): ${wallet.slice(0, 6)}... -> ${position} $${betAmount}`);
+  
+  console.log(`✅ Bet recorded: ${wallet.slice(0, 6)}... → ${position} $${betAmount} on "${market.question.substring(0, 50)}..."`);
+  
+  broadcast({ type: 'NEW_BET', bet, market });
+  
   return { bet, market };
 }
 
+/**
+ * Get current active markets
+ */
+export function getActiveMarkets() {
+  return loadMarkets().filter(m => m.status === 'open');
+}
+
+/**
+ * Check and resolve expired markets
+ */
+export async function checkAndResolveExpiredMarkets() {
+  const markets = loadMarkets();
+  const expiredMarkets = markets.filter(m => {
+    if (m.status !== 'open') return false;
+    return Date.now() >= m.expiresAt;
+  });
+  
+  if (expiredMarkets.length > 0) {
+    console.log(`\n⏰ Found ${expiredMarkets.length} expired market(s) to resolve`);
+    
+    for (const market of expiredMarkets) {
+      await resolveMarket(market.id);
+      // Add delay between resolutions to avoid rate limiting
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  
+  return expiredMarkets.length;
+}
+
+/**
+ * Legacy function - kept for compatibility
+ * Creates a simple price-based market (deprecated, use createMarketFromPolymarket)
+ */
+export async function createMarket(symbol = 'BTC', durationMinutes = CONFIG.MARKET_DURATION_MINUTES || 2) {
+  console.log('\n⚠️ Using legacy price-based market creation. Consider using createMarketFromPolymarket() for Polymarket-style markets.');
+  return createMarketFromPolymarket();
+}
