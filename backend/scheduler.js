@@ -1,4 +1,4 @@
-import { createDiverseMarkets, resolveMarket, checkAndResolveExpiredMarkets } from './agent.js';
+import { createDiverseMarkets, checkAndResolveExpiredMarkets } from './agent.js';
 import { loadMarkets } from './db.js';
 import { AgentManager } from './agents/index.js';
 

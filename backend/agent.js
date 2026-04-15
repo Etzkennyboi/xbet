@@ -9,87 +9,96 @@ import { resolveMarketWithAI, canResolveMarket } from './ai-resolver.js';
 let isProcessing = false;
 
 /**
- * Creates a new prediction market based on a real Polymarket question
- * Pulled from live Polymarket data and resolved by AI
+ * Creates 3 diverse prediction markets from Polymarket
+ * Ensures one of each type: Politics, Crypto, Technology
  */
-export async function createMarketFromPolymarket() {
-  if (isProcessing) return null;
+export async function createThreeDiverseMarkets() {
+  if (isProcessing) return [];
   isProcessing = true;
   
+  const createdMarkets = [];
+  
   try {
-    console.log('\n🔍 Fetching markets from Polymarket...');
+    console.log('\n🔍 Fetching 3 diverse markets from Polymarket...');
     
-    // Fetch active markets from Polymarket
-    const markets = await fetchPolymarketMarkets(10, true);
+    // Fetch one market from each category
+    const diverseMarkets = await fetchDiverseMarkets();
     
-    if (!markets || markets.length === 0) {
-      console.log('   ⚠️ No markets available from Polymarket, using fallback');
-      return null;
+    if (!diverseMarkets || diverseMarkets.length === 0) {
+      console.log('   ⚠️ No markets available from Polymarket');
+      return [];
     }
     
-    // Select the best market (highest liquidity)
-    const selectedMarket = selectBestMarket(markets);
-    
-    if (!selectedMarket) {
-      console.log('   ⚠️ Could not select a market');
-      return null;
+    // Create each market
+    for (const selectedMarket of diverseMarkets) {
+      const metrics = calculateMarketMetrics(selectedMarket);
+      
+      // Create a unique market ID for our platform
+      const now = Date.now();
+      const marketId = `pm_${selectedMarket.id}_${now}`;
+      
+      // Calculate expiry date
+      const endDate = new Date(selectedMarket.endDate);
+      const expiresAt = endDate.getTime();
+      
+      // Skip if already expired
+      if (expiresAt <= now) {
+        console.log(`   ⚠️ Skipping expired ${selectedMarket.category} market`);
+        continue;
+      }
+      
+      const market = {
+        id: marketId,
+        polymarketId: selectedMarket.id,
+        polymarketConditionId: selectedMarket.conditionId,
+        question: selectedMarket.question,
+        description: selectedMarket.description,
+        image: selectedMarket.image,
+        category: selectedMarket.category,
+        liquidity: selectedMarket.liquidity,
+        expiresAt: expiresAt,
+        endDate: selectedMarket.endDate,
+        status: 'open',
+        yesPool: 0,
+        noPool: 0,
+        yesCount: 0,
+        noCount: 0,
+        source: 'polymarket',
+        metrics: metrics
+      };
+      
+      addMarket(market);
+      createdMarkets.push(market);
+      
+      console.log(`\n🆕 ${market.category.toUpperCase()} MARKET CREATED`);
+      console.log(`   ID: ${marketId}`);
+      console.log(`   Question: ${market.question.substring(0, 70)}${market.question.length > 70 ? '...' : ''}`);
+      console.log(`   Liquidity: $${parseFloat(market.liquidity || '0').toLocaleString()}`);
+      console.log(`   Expires: ${metrics.daysRemaining}d ${metrics.hoursRemaining}h`);
+      
+      broadcast({ type: 'NEW_MARKET', market });
+      
+      // Small delay between creations
+      await new Promise(r => setTimeout(r, 1000));
     }
     
-    const metrics = calculateMarketMetrics(selectedMarket);
-    
-    // Create a unique market ID for our platform
-    const now = Date.now();
-    const marketId = `pm_${selectedMarket.id}_${now}`;
-    
-    // Calculate expiry date (use Polymarket's end date or default to 30 days)
-    const endDate = new Date(selectedMarket.endDate);
-    const expiresAt = endDate.getTime();
-    
-    // Check if market hasn't already expired
-    if (expiresAt <= now) {
-      console.log(`   ⚠️ Selected market already expired, skipping`);
-      return null;
-    }
-    
-    const market = {
-      id: marketId,
-      polymarketId: selectedMarket.id,
-      polymarketConditionId: selectedMarket.conditionId,
-      question: selectedMarket.question,
-      description: selectedMarket.description,
-      image: selectedMarket.image,
-      category: selectedMarket.category,
-      liquidity: selectedMarket.liquidity,
-      expiresAt: expiresAt,
-      endDate: selectedMarket.endDate,
-      status: 'open',
-      yesPool: 0,
-      noPool: 0,
-      yesCount: 0,
-      noCount: 0,
-      source: 'polymarket',
-      metrics: metrics
-    };
-    
-    addMarket(market);
-    
-    console.log(`\n🆕 NEW POLYMARKET-STYLE MARKET CREATED`);
-    console.log(`   ID: ${marketId}`);
-    console.log(`   Question: ${market.question}`);
-    console.log(`   Category: ${market.category}`);
-    console.log(`   Original Liquidity: $${parseFloat(market.liquidity || '0').toLocaleString()}`);
-    console.log(`   Expires: ${new Date(expiresAt).toLocaleString()} (${metrics.daysRemaining}d ${metrics.hoursRemaining}h)`);
-    console.log(`   Resolution: AI-powered`);
-    
-    broadcast({ type: 'NEW_MARKET', market });
-    return market;
+    console.log(`\n✅ Created ${createdMarkets.length} diverse markets`);
+    return createdMarkets;
     
   } catch (err) {
-    console.error(`   ❌ Error creating market: ${err.message}`);
-    return null;
+    console.error(`   ❌ Error creating markets: ${err.message}`);
+    return createdMarkets;
   } finally {
     isProcessing = false;
   }
+}
+
+/**
+ * Creates a single prediction market (legacy compatibility)
+ */
+export async function createMarketFromPolymarket() {
+  const markets = await createThreeDiverseMarkets();
+  return markets[0] || null;
 }
 
 /**
