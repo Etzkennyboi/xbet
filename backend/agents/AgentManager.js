@@ -66,18 +66,45 @@ export class AgentManager {
   
   /**
    * Initialize default agents
+   * Exactly 2 agents: Alpha and Sigma with specific wallets
    */
   initializeDefaultAgents() {
-    console.log('\n🤖 [AgentManager] Initializing default agents...');
+    console.log('\n🤖 [AgentManager] Initializing 2 trading agents...');
     
-    // Spawn Alpha agents (conservative)
-    this.spawnAgent('alpha', 0);
-    this.spawnAgent('alpha', 1);
+    // Spawn Alpha agent (conservative)
+    const alpha = new AlphaAgent();
+    this._loadAndRegisterAgent(alpha);
     
-    // Spawn Sigma agents (aggressive)
-    this.spawnAgent('sigma', 2);
-    this.spawnAgent('sigma', 3);
+    // Spawn Sigma agent (aggressive)
+    const sigma = new SigmaAgent();
+    this._loadAndRegisterAgent(sigma);
     
+    console.log(`[AgentManager] Total agents: ${this.agents.size}`);
+    console.log(`  • Alpha: ${alpha.wallet.address.slice(0, 10)}... (max 3 trades/day, 0.01 USDT/trade)`);
+    console.log(`  • Sigma: ${sigma.wallet.address.slice(0, 10)}... (max 3 trades/day, 0.01 USDT/trade)\n`);
+  }
+  
+  /**
+   * Load performance and register agent
+   */
+  _loadAndRegisterAgent(agent) {
+    // Load previous performance if exists
+    const savedPerformance = loadAgentPerformance(agent.id);
+    if (savedPerformance) {
+      agent.performance = { ...agent.performance, ...savedPerformance };
+      // Also load daily trade tracking
+      if (savedPerformance.dailyTrades !== undefined) {
+        agent.dailyTrades = savedPerformance.dailyTrades;
+      }
+      if (savedPerformance.lastTradeDate) {
+        agent.lastTradeDate = savedPerformance.lastTradeDate;
+      }
+      console.log(`[AgentManager] Loaded saved performance for ${agent.name}`);
+    }
+    
+    this.agents.set(agent.id, agent);
+    console.log(`[AgentManager] Registered ${agent.name} (${agent.type})`);
+  }
     console.log(`[AgentManager] Total agents: ${this.agents.size}\n`);
   }
   
@@ -139,7 +166,7 @@ export class AgentManager {
     // Deactivate all agents
     for (const agent of this.agents.values()) {
       agent.deactivate();
-      saveAgentPerformance(agent.id, agent.performance);
+      saveAgentPerformance(agent.id, agent.performance, agent.dailyTrades, agent.lastTradeDate);
     }
     
     this.isRunning = false;
@@ -172,7 +199,7 @@ export class AgentManager {
     
     // Save performance after cycle
     for (const agent of activeAgents) {
-      saveAgentPerformance(agent.id, agent.performance);
+      saveAgentPerformance(agent.id, agent.performance, agent.dailyTrades, agent.lastTradeDate);
     }
     
     console.log('[AgentManager] Trading cycle complete\n');

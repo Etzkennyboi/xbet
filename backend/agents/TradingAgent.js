@@ -15,13 +15,26 @@ export class TradingAgent {
     this.type = config.type || 'base';
     this.strategy = config.strategy || 'conservative';
     
-    // Wallet setup - each agent has its own wallet derived from master seed
-    this.wallet = this._deriveWallet(config.index || 0);
+    // Wallet setup - use provided address or derive from seed
+    if (config.walletAddress) {
+      // Use specific wallet address (for production agents)
+      this.wallet = { address: config.walletAddress };
+      this.specificWallet = true;
+    } else {
+      // Derive wallet from master seed
+      this.wallet = this._deriveWallet(config.index || 0);
+      this.specificWallet = false;
+    }
     
     // Trading parameters
     this.minConfidence = config.minConfidence || 0.6;
-    this.maxPositionSize = config.maxPositionSize || 10; // USDT
-    this.riskLevel = config.riskLevel || 'medium'; // low, medium, high
+    this.maxPositionSize = config.maxPositionSize || 0.01; // USDT - default 0.01
+    this.maxTradesPerDay = config.maxTradesPerDay || 3; // Max 3 trades per day
+    this.riskLevel = config.riskLevel || 'medium';
+    
+    // Daily trade tracking
+    this.dailyTrades = 0;
+    this.lastTradeDate = null;
     
     // Performance tracking
     this.performance = {
@@ -58,6 +71,38 @@ export class TradingAgent {
     
     const hdNode = ethers.HDNodeWallet.fromSeed(ethers.sha256(ethers.toUtf8Bytes(masterKey)));
     return hdNode.derivePath(`m/44'/60'/${index}'/0/0`);
+  }
+  
+  /**
+   * Check if agent can trade today (max 3 trades per day)
+   */
+  canTradeToday() {
+    const today = new Date().toDateString();
+    
+    if (this.lastTradeDate !== today) {
+      // New day - reset counter
+      this.dailyTrades = 0;
+      this.lastTradeDate = today;
+      return { canTrade: true, remaining: this.maxTradesPerDay };
+    }
+    
+    const remaining = this.maxTradesPerDay - this.dailyTrades;
+    return { canTrade: remaining > 0, remaining };
+  }
+  
+  /**
+   * Record a trade for daily tracking
+   */
+  recordDailyTrade() {
+    const today = new Date().toDateString();
+    
+    if (this.lastTradeDate !== today) {
+      this.dailyTrades = 0;
+      this.lastTradeDate = today;
+    }
+    
+    this.dailyTrades++;
+    this.lastTradeTime = Date.now();
   }
   
   /**
@@ -152,8 +197,12 @@ export class TradingAgent {
       this.performance.totalTrades++;
       this.currentPositions.push(trade);
       
+      // Record daily trade for limit tracking
+      this.recordDailyTrade();
+      
       console.log(`   ✅ Trade executed: ${trade.id}`);
       console.log(`   💰 Balance: $${this.performance.currentBalance.toFixed(2)}`);
+      console.log(`   📊 Daily trades: ${this.dailyTrades}/${this.maxTradesPerDay}`);
       
       return trade;
       

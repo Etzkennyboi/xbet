@@ -5,22 +5,23 @@ import TradingAgent from './TradingAgent.js';
  * 
  * Characteristics:
  * - Lower confidence threshold (60%+)
- * - Larger position sizes (5-15 USDT)
+ * - Fixed position size: 0.01 USDT per trade
+ * - Maximum 3 trades per day
  * - Momentum-based trading
  * - Follows the money (majority bet)
- * - Short-term focus
  * 
  * Philosophy: "Ride the wave, cut losses quickly"
  */
 export class SigmaAgent extends TradingAgent {
-  constructor(index = 1) {
+  constructor() {
     super({
       name: 'Sigma',
       type: 'aggressive',
       strategy: 'momentum',
-      index: index,
+      walletAddress: '0x1eF1034E7Cd690B40A329bd64209Ce563F95Bb5c', // Specific wallet
       minConfidence: 0.6,
-      maxPositionSize: 15,
+      maxPositionSize: 0.01, // Fixed: 0.01 USDT max per trade
+      maxTradesPerDay: 3, // Fixed: max 3 trades per day
       riskLevel: 'high',
       strategyParams: {
         minPoolSize: 1000,       // Minimum total pool
@@ -40,8 +41,19 @@ export class SigmaAgent extends TradingAgent {
   
   /**
    * Sigma's evaluation logic
+   * Only trades if within daily limit
    */
   async evaluateMarket(market) {
+    // Check daily trade limit first
+    const tradeStatus = this.canTradeToday();
+    if (!tradeStatus.canTrade) {
+      return {
+        shouldTrade: false,
+        confidence: 0,
+        reasoning: `Daily trade limit reached (${this.maxTradesPerDay}/day)`
+      };
+    }
+    
     const metrics = this._analyzeMarket(market);
     
     // Check minimum pool size
@@ -75,15 +87,12 @@ export class SigmaAgent extends TradingAgent {
       };
     }
     
-    // Calculate position size - Sigma goes big on momentum
-    const positionSize = this._calculatePositionSize(adjustedConfidence, metrics.totalPool);
-    
     return {
       shouldTrade: true,
       confidence: adjustedConfidence,
       position: momentum.direction,
-      amount: positionSize,
-      reasoning: `Sigma strategy: Following ${momentum.direction} momentum at ${(momentum.strength * 100).toFixed(1)}% strength. Pool: $${metrics.totalPool.toLocaleString()}. Category: ${market.category}.`
+      amount: this.maxPositionSize, // Fixed: 0.01 USDT
+      reasoning: `Sigma strategy: Following ${momentum.direction} momentum. Trade ${tradeStatus.remaining} of ${this.maxTradesPerDay} today.`
     };
   }
   
@@ -126,17 +135,6 @@ export class SigmaAgent extends TradingAgent {
     // This would ideally query recent bets from DB
     // For now, simplified
     return 0;
-  }
-  
-  _calculatePositionSize(confidence, poolSize) {
-    // Sigma scales position with confidence and pool size
-    // Higher confidence + larger pool = bigger bet
-    const baseSize = 5;
-    const confidenceMultiplier = (confidence - this.minConfidence) / (1 - this.minConfidence);
-    const poolMultiplier = Math.min(poolSize / 10000, 1); // Cap at 10k pool size
-    
-    const size = baseSize + (confidenceMultiplier * 7) + (poolMultiplier * 3);
-    return Math.min(size, this.maxPositionSize);
   }
 }
 

@@ -131,8 +131,12 @@ export function loadAgentPerformance(agentId) {
   }
 }
 
-export function saveAgentPerformance(agentId, performance) {
+export function saveAgentPerformance(agentId, performance, dailyTrades, lastTradeDate) {
   const data = loadAgentPerformance();
-  data[agentId] = performance;
+  data[agentId] = {
+    ...performance,
+    dailyTrades: dailyTrades || 0,
+    lastTradeDate: lastTradeDate || null
+  };
   writeFileSync(AGENT_PERF_FILE, JSON.stringify(data, null, 2));
 }

@@ -6,22 +6,23 @@ import { loadMarkets } from '../db.js';
  * 
  * Characteristics:
  * - High confidence threshold (80%+)
- * - Small position sizes (1-3 USDT)
+ * - Fixed position size: 0.01 USDT per trade
+ * - Maximum 3 trades per day
  * - Focus on arbitrage opportunities
  * - Avoids volatile markets
- * - Prioritizes markets with high liquidity
  * 
  * Philosophy: "Capital preservation over returns"
  */
 export class AlphaAgent extends TradingAgent {
-  constructor(index = 0) {
+  constructor() {
     super({
       name: 'Alpha',
       type: 'conservative',
       strategy: 'arbitrage',
-      index: index,
+      walletAddress: '0xf33ee27249dd9f870c5fe318064065e1ffe218f9', // Specific wallet
       minConfidence: 0.8,
-      maxPositionSize: 3,
+      maxPositionSize: 0.01, // Fixed: 0.01 USDT max per trade
+      maxTradesPerDay: 3, // Fixed: max 3 trades per day
       riskLevel: 'low',
       strategyParams: {
         minLiquidity: 50000,      // $50k minimum liquidity
@@ -34,8 +35,19 @@ export class AlphaAgent extends TradingAgent {
   
   /**
    * Alpha's evaluation logic
+   * Only trades if within daily limit
    */
   async evaluateMarket(market) {
+    // Check daily trade limit first
+    const tradeStatus = this.canTradeToday();
+    if (!tradeStatus.canTrade) {
+      return {
+        shouldTrade: false,
+        confidence: 0,
+        reasoning: `Daily trade limit reached (${this.maxTradesPerDay}/day)`
+      };
+    }
+    
     const metrics = {
       liquidity: parseFloat(market.liquidity || '0'),
       timeToExpiry: market.expiresAt - Date.now(),
@@ -80,23 +92,13 @@ export class AlphaAgent extends TradingAgent {
       };
     }
     
-    // Calculate position size based on confidence
-    const positionSize = this._calculatePositionSize(confidence);
-    
     return {
       shouldTrade: true,
       confidence: confidence,
       position: position,
-      amount: positionSize,
-      reasoning: `Alpha strategy: ${position} at ${(metrics.impliedProb * 100).toFixed(1)}% implied probability. Liquidity: $${metrics.liquidity.toLocaleString()}. Value opportunity detected.`
+      amount: this.maxPositionSize, // Fixed: 0.01 USDT
+      reasoning: `Alpha strategy: ${position} at ${(metrics.impliedProb * 100).toFixed(1)}% implied probability. Trade ${tradeStatus.remaining} of ${this.maxTradesPerDay} today.`
     };
-  }
-  
-  _calculatePositionSize(confidence) {
-    // Linear scale: 1-3 USDT based on confidence
-    const base = 1;
-    const scale = (confidence - this.minConfidence) / (1 - this.minConfidence);
-    return Math.min(base + (scale * 2), this.maxPositionSize);
   }
 }
 
