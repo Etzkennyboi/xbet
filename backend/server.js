@@ -6,11 +6,16 @@ import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { startScheduler } from './scheduler.js';
 import { recordEntry } from './agent.js';
-import { loadMarkets, loadBets, loadHistory } from './db.js';
+import { loadMarkets, loadBets, loadHistory, loadAgentPerformance } from './db.js';
 import { getAgentAddress, getAgentBalance } from './wallet-api.js';
 import { getPrice } from './market-api.js';
+import { AgentManager } from './agents/index.js';
 
 dotenv.config();
+
+// Initialize Agent Manager
+const agentManager = new AgentManager();
+agentManager.initializeDefaultAgents();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -91,8 +96,66 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: Date.now(),
-    agentWallet: getAgentAddress() || 'not set'
+    agentWallet: getAgentAddress() || 'not set',
+    agentManager: agentManager.getStatus()
   });
+});
+
+// Agent Manager API Routes
+
+// Get all agents
+app.get('/api/agents', (req, res) => {
+  const agents = agentManager.getAllAgents().map(agent => agent.getStats());
+  res.json({ success: true, agents });
+});
+
+// Get agent by ID
+app.get('/api/agents/:id', (req, res) => {
+  const agent = agentManager.getAgent(req.params.id);
+  if (!agent) {
+    return res.status(404).json({ error: 'Agent not found' });
+  }
+  res.json({ success: true, agent: agent.getStats() });
+});
+
+// Get leaderboard
+app.get('/api/leaderboard', (req, res) => {
+  const leaderboard = agentManager.getLeaderboard();
+  res.json({ success: true, ...leaderboard });
+});
+
+// Start/stop agent manager
+app.post('/api/agents/control', (req, res) => {
+  const { action } = req.body;
+  
+  if (action === 'start') {
+    agentManager.start();
+    res.json({ success: true, message: 'Agent manager started' });
+  } else if (action === 'stop') {
+    agentManager.stop();
+    res.json({ success: true, message: 'Agent manager stopped' });
+  } else {
+    res.status(400).json({ error: 'Invalid action. Use start or stop' });
+  }
+});
+
+// Pause/resume specific agent
+app.post('/api/agents/:id/control', (req, res) => {
+  const { id } = req.params;
+  const { action } = req.body;
+  
+  if (action === 'pause') {
+    agentManager.pauseAgent(id);
+    res.json({ success: true, message: 'Agent paused' });
+  } else if (action === 'resume') {
+    agentManager.resumeAgent(id);
+    res.json({ success: true, message: 'Agent resumed' });
+  } else if (action === 'remove') {
+    agentManager.removeAgent(id);
+    res.json({ success: true, message: 'Agent removed' });
+  } else {
+    res.status(400).json({ error: 'Invalid action' });
+  }
 });
 
 wss.on('connection', (ws) => {
@@ -103,15 +166,15 @@ wss.on('connection', (ws) => {
 const isMain = process.argv[1] && (path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url)));
 
 if (isMain) {
-  startScheduler();
+  startScheduler(agentManager);
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {
     console.log(`
-╔═══════════════════════════════════════════╗
-║   CryptoCall Agent is LIVE 🚀             ║
-║   http://localhost:${PORT} or https://xbet-main.vercel.app/                 ║
-║   USDC Agent Wallet mode active           ║
-╚═══════════════════════════════════════════╝
+╔════════════════════════════════════════════════════════════╗
+║   🤖 AI AGENT TRADING SYSTEM LIVE 🚀                      ║
+║   http://localhost:${PORT}                                  ║
+║   Polymarket Prediction Market + AI Trading Agents        ║
+╚════════════════════════════════════════════════════════════╝
     `);
   });
 }

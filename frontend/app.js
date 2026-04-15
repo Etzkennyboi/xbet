@@ -109,7 +109,82 @@ async function fetchInitialData() {
   await fetchAgentWallet();
   await fetchMarket();
   await fetchHistory();
+  await fetchLeaderboard();
   updateStats();
+  
+  // Poll leaderboard every 30 seconds
+  setInterval(fetchLeaderboard, 30000);
+}
+
+// Fetch leaderboard data
+async function fetchLeaderboard() {
+  try {
+    const r = await fetch('/api/leaderboard');
+    const data = await r.json();
+    
+    if (data.success) {
+      renderLeaderboard(data);
+      updateAgentSummary(data.summary);
+    }
+  } catch (err) {
+    console.error('Error fetching leaderboard:', err);
+  }
+}
+
+// Update agent summary
+function updateAgentSummary(summary) {
+  const totalAgentsEl = document.getElementById('total-agents');
+  const activeAgentsEl = document.getElementById('active-agents');
+  const combinedPnlEl = document.getElementById('combined-pnl');
+  
+  if (totalAgentsEl) totalAgentsEl.textContent = summary.totalAgents;
+  if (activeAgentsEl) activeAgentsEl.textContent = summary.activeAgents;
+  if (combinedPnlEl) {
+    const pnl = summary.totalPnL || 0;
+    combinedPnlEl.textContent = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+    combinedPnlEl.className = `summary-value ${pnl >= 0 ? 'positive' : 'negative'}`;
+  }
+}
+
+// Render leaderboard
+function renderLeaderboard(data) {
+  const tbody = document.getElementById('leaderboard-tbody');
+  if (!tbody) return;
+  
+  const rankings = data.rankings || [];
+  
+  if (rankings.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No agents active yet</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = rankings.map(agent => {
+    const isTop3 = agent.rank <= 3;
+    const rankClass = isTop3 ? `rank-${agent.rank}` : '';
+    const profitClass = agent.netProfit >= 0 ? 'positive' : 'negative';
+    const statusClass = agent.active ? 'status-active' : 'status-inactive';
+    
+    return `
+      <tr class="${rankClass}">
+        <td class="rank-cell">
+          ${isTop3 ? '<span class="rank-badge">' + agent.rank + '</span>' : agent.rank}
+        </td>
+        <td class="agent-name">
+          <div class="agent-info">
+            <span class="agent-type ${agent.type}">${agent.name}</span>
+            <span class="agent-wallet">${agent.wallet.slice(0, 6)}...${agent.wallet.slice(-4)}</span>
+          </div>
+        </td>
+        <td><span class="strategy-badge ${agent.strategy}">${agent.strategy}</span></td>
+        <td>${agent.totalTrades}</td>
+        <td>${(agent.winRate * 100).toFixed(1)}%</td>
+        <td class="${profitClass}">${agent.netProfit >= 0 ? '+' : ''}$${agent.netProfit.toFixed(2)}</td>
+        <td>${agent.roi.toFixed(1)}%</td>
+        <td>$${agent.currentBalance.toFixed(2)}</td>
+        <td><span class="status-dot ${statusClass}">${agent.active ? 'Active' : 'Paused'}</span></td>
+      </tr>
+    `;
+  }).join('');
 }
 
 async function fetchAgentWallet() {

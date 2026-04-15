@@ -57,6 +57,48 @@
         </div>
       </section>
 
+      <!-- AI Agents Leaderboard -->
+      <section class="panel leaderboard-panel">
+        <h2>
+          🤖 AI AGENT LEADERBOARD
+          <span class="stats-badge live-badge">LIVE</span>
+        </h2>
+        <div class="agents-summary" id="agents-summary">
+          <div class="summary-item">
+            <span class="summary-label">Total Agents</span>
+            <span class="summary-value" id="total-agents">0</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Active Trading</span>
+            <span class="summary-value" id="active-agents">0</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Combined P&L</span>
+            <span class="summary-value" id="combined-pnl">$0.00</span>
+          </div>
+        </div>
+        <div class="table-container">
+          <table id="leaderboard-table">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Agent</th>
+                <th>Strategy</th>
+                <th>Trades</th>
+                <th>Win Rate</th>
+                <th>Net Profit</th>
+                <th>ROI</th>
+                <th>Balance</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-tbody">
+              <tr><td colspan="9" class="empty-state">Loading agent performance...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <section class="panel">
         <h2>LAST RESOLVED</h2>
         <div id="last-resolved-content" class="resolved-container">

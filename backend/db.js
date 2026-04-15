@@ -113,3 +113,26 @@ export function saveToHistory(resolvedMarket) {
   }
   writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
 }
+
+// --- Agent Performance ---
+const AGENT_PERF_FILE = path.join(DATA_DIR, 'agent-performance.json');
+
+if (!existsSync(AGENT_PERF_FILE)) {
+  writeFileSync(AGENT_PERF_FILE, JSON.stringify({}));
+}
+
+export function loadAgentPerformance(agentId) {
+  try {
+    const data = JSON.parse(readFileSync(AGENT_PERF_FILE, 'utf8'));
+    return agentId ? data[agentId] || null : data;
+  } catch (err) {
+    console.error('Error reading agent-performance.json:', err.message);
+    return agentId ? null : {};
+  }
+}
+
+export function saveAgentPerformance(agentId, performance) {
+  const data = loadAgentPerformance();
+  data[agentId] = performance;
+  writeFileSync(AGENT_PERF_FILE, JSON.stringify(data, null, 2));
+}

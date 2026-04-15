@@ -1,10 +1,23 @@
 import { createMarketFromPolymarket, resolveMarket, checkAndResolveExpiredMarkets } from './agent.js';
 import { loadMarkets } from './db.js';
+import { AgentManager } from './agents/index.js';
 
 const MAX_ACTIVE_MARKETS = 3;  // Maximum number of concurrent active markets
 const CHECK_INTERVAL_MS = 30000;  // Check every 30 seconds
 
-export async function startScheduler() {
+// Global agent manager instance (shared with server.js)
+let agentManager = null;
+
+export async function startScheduler(agentMgr) {
+  // Accept agent manager from server.js if provided
+  if (agentMgr) {
+    agentManager = agentMgr;
+  }
+  
+  // Start agent manager if not already running
+  if (agentManager && !agentManager.isRunning) {
+    agentManager.start();
+  }
   console.log(`⏰ Starting Polymarket AI-Resolved Prediction Market Scheduler...`);
   console.log(`   Max active markets: ${MAX_ACTIVE_MARKETS}`);
   console.log(`   Check interval: ${CHECK_INTERVAL_MS / 1000}s`);
