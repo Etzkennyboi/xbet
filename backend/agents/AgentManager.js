@@ -104,7 +104,6 @@ export class AgentManager {
     
     this.agents.set(agent.id, agent);
     console.log(`[AgentManager] Registered ${agent.name} (${agent.type})`);
-  }
     console.log(`[AgentManager] Total agents: ${this.agents.size}\n`);
   }
   
