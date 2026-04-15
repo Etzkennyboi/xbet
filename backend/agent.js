@@ -3,7 +3,7 @@ import { canAcceptBets } from './wallet-api.js';
 import { broadcast } from './server.js';
 import { loadMarkets, saveMarkets, saveBet, loadBets, clearBets, saveToHistory, addMarket, updateMarket, removeMarket } from './db.js';
 import { CONFIG } from '../config.js';
-import { fetchPolymarketMarkets, selectBestMarket, calculateMarketMetrics } from './polymarket-api.js';
+import { fetchPolymarketMarkets, fetchDiverseMarkets, selectBestMarket, calculateMarketMetrics } from './polymarket-api.js';
 import { resolveMarketWithAI, canResolveMarket } from './ai-resolver.js';
 
 let isProcessing = false;
@@ -303,4 +303,82 @@ export async function checkAndResolveExpiredMarkets() {
 export async function createMarket(symbol = 'BTC', durationMinutes = CONFIG.MARKET_DURATION_MINUTES || 2) {
   console.log('\n⚠️ Using legacy price-based market creation. Consider using createMarketFromPolymarket() for Polymarket-style markets.');
   return createMarketFromPolymarket();
+}
+
+/**
+ * Creates 3 diverse markets from Polymarket
+ * One from each category: Politics, Crypto, Technology
+ */
+export async function createDiverseMarkets() {
+  if (isProcessing) return [];
+  isProcessing = true;
+  
+  const createdMarkets = [];
+  
+  try {
+    console.log('\n🌍 Creating 3 diverse markets from Polymarket...');
+    
+    // Fetch one market from each category
+    const diverseMarkets = await fetchDiverseMarkets();
+    
+    if (!diverseMarkets || diverseMarkets.length === 0) {
+      console.log('   ⚠️ No markets fetched, using fallback samples');
+      return [];
+    }
+    
+    for (const selectedMarket of diverseMarkets) {
+      const metrics = calculateMarketMetrics(selectedMarket);
+      
+      // Create a unique market ID for our platform
+      const now = Date.now();
+      const marketId = `pm_${selectedMarket.id}_${now}`;
+      
+      // Calculate expiry date
+      const endDate = new Date(selectedMarket.endDate);
+      const expiresAt = endDate.getTime();
+      
+      // Skip if already expired
+      if (expiresAt <= now) {
+        console.log(`   ⚠️ Skipping expired market: ${selectedMarket.question.substring(0, 40)}...`);
+        continue;
+      }
+      
+      const market = {
+        id: marketId,
+        polymarketId: selectedMarket.id,
+        polymarketConditionId: selectedMarket.conditionId,
+        question: selectedMarket.question,
+        description: selectedMarket.description,
+        image: selectedMarket.image,
+        category: selectedMarket.category,
+        liquidity: selectedMarket.liquidity,
+        expiresAt: expiresAt,
+        endDate: selectedMarket.endDate,
+        status: 'open',
+        yesPool: 0,
+        noPool: 0,
+        yesCount: 0,
+        noCount: 0,
+        source: 'polymarket',
+        metrics: metrics
+      };
+      
+      addMarket(market);
+      createdMarkets.push(market);
+      
+      console.log(`\n   ✅ ${selectedMarket.category}: "${market.question.substring(0, 50)}..."`);
+      console.log(`      Expires: ${metrics.daysRemaining}d ${metrics.hoursRemaining}h | Liquidity: $${parseFloat(market.liquidity || '0').toLocaleString()}`);
+      
+      broadcast({ type: 'NEW_MARKET', market });
+    }
+    
+    console.log(`\n🎉 Created ${createdMarkets.length} diverse markets`);
+    return createdMarkets;
+    
+  } catch (err) {
+    console.error(`   ❌ Error creating diverse markets: ${err.message}`);
+    return createdMarkets;
+  } finally {
+    isProcessing = false;
+  }
 }

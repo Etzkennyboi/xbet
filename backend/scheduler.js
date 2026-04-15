@@ -1,4 +1,4 @@
-import { createMarketFromPolymarket, resolveMarket, checkAndResolveExpiredMarkets } from './agent.js';
+import { createDiverseMarkets, resolveMarket, checkAndResolveExpiredMarkets } from './agent.js';
 import { loadMarkets } from './db.js';
 import { AgentManager } from './agents/index.js';
 
@@ -18,6 +18,7 @@ export async function startScheduler(agentMgr) {
   if (agentManager && !agentManager.isRunning) {
     agentManager.start();
   }
+  
   console.log(`⏰ Starting Polymarket AI-Resolved Prediction Market Scheduler...`);
   console.log(`   Max active markets: ${MAX_ACTIVE_MARKETS}`);
   console.log(`   Check interval: ${CHECK_INTERVAL_MS / 1000}s`);
@@ -36,24 +37,32 @@ export async function startScheduler(agentMgr) {
         const needed = MAX_ACTIVE_MARKETS - activeCount;
         console.log(`\n📊 Active markets: ${activeCount}/${MAX_ACTIVE_MARKETS}. Creating ${needed} new market(s)...`);
         
-        for (let i = 0; i < needed; i++) {
-          await createMarketFromPolymarket();
-          // Wait between market creations to avoid rate limiting
-          if (i < needed - 1) {
-            await new Promise(r => setTimeout(r, 3000));
-          }
-        }
+        // Create diverse markets (one from each category)
+        await createDiverseMarkets();
+        
       } else {
         console.log(`📊 Active markets: ${activeCount}/${MAX_ACTIVE_MARKETS} (saturated)`);
       }
       
-      // Log current active markets
+      // Log current active markets with categories
       if (activeMarkets.length > 0) {
         console.log(`\n📋 Current Active Markets:`);
-        activeMarkets.forEach((m, idx) => {
-          const daysLeft = Math.ceil((m.expiresAt - Date.now()) / (1000 * 60 * 60 * 24));
-          console.log(`   ${idx + 1}. "${m.question.substring(0, 60)}${m.question.length > 60 ? '...' : ''}"`);
-          console.log(`      └─ Expires in ${daysLeft} days | Pool: YES $${m.yesPool.toFixed(2)} / NO $${m.noPool.toFixed(2)}`);
+        
+        // Group by category
+        const byCategory = {};
+        activeMarkets.forEach(m => {
+          const cat = m.category || 'General';
+          if (!byCategory[cat]) byCategory[cat] = [];
+          byCategory[cat].push(m);
+        });
+        
+        Object.entries(byCategory).forEach(([cat, markets]) => {
+          console.log(`   📂 ${cat}:`);
+          markets.forEach((m, idx) => {
+            const daysLeft = Math.ceil((m.expiresAt - Date.now()) / (1000 * 60 * 60 * 24));
+            console.log(`      ${idx + 1}. "${m.question.substring(0, 50)}${m.question.length > 50 ? '...' : ''}"`);
+            console.log(`         └─ Expires in ${daysLeft}d | Pool: YES $${(m.yesPool || 0).toFixed(2)} / NO $${(m.noPool || 0).toFixed(2)}`);
+          });
         });
       }
       
@@ -64,17 +73,15 @@ export async function startScheduler(agentMgr) {
 
   // Initial startup trigger
   setTimeout(async () => {
-    console.log('\n🚀 Creating initial markets from Polymarket...');
+    console.log('\n🚀 Creating initial diverse markets from Polymarket...');
     const activeMarkets = loadMarkets().filter(m => m.status === 'open');
-    const needed = MAX_ACTIVE_MARKETS - activeMarkets.length;
     
-    if (needed > 0) {
-      for (let i = 0; i < needed; i++) {
-        await createMarketFromPolymarket();
-        await new Promise(r => setTimeout(r, 3000));
-      }
+    if (activeMarkets.length < MAX_ACTIVE_MARKETS) {
+      await createDiverseMarkets();
     }
+    
     console.log('✅ Initial market creation complete\n');
   }, 2000);
 }
 
+export default startScheduler;

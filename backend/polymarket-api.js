@@ -47,6 +47,79 @@ export async function fetchPolymarketMarkets(limit = 5, activeOnly = true) {
 }
 
 /**
+ * Fetches markets by specific category
+ * @param {string} category - Category to filter by
+ * @param {number} limit - Number of markets to fetch
+ * @returns {Promise<Array>} Array of market objects
+ */
+export async function fetchMarketsByCategory(category, limit = 3) {
+  try {
+    // Fetch all markets then filter by category
+    const allMarkets = await fetchPolymarketMarkets(20, true);
+    const categoryMarkets = allMarkets.filter(m => 
+      m.category?.toLowerCase().includes(category.toLowerCase()) ||
+      category.toLowerCase().includes(m.category?.toLowerCase() || '')
+    );
+    
+    return categoryMarkets.slice(0, limit);
+  } catch (err) {
+    console.error(`[POLYMARKET API ERROR] Failed to fetch ${category} markets: ${err.message}`);
+    // Return category-specific sample markets
+    return getSampleMarketsByCategory(category);
+  }
+}
+
+/**
+ * Selects one market from each category type
+ * Ensures we have diverse market types
+ */
+export async function fetchDiverseMarkets() {
+  const targetCategories = ['Politics', 'Crypto', 'Technology'];
+  const selectedMarkets = [];
+  
+  console.log('\n🔍 Fetching diverse market types from Polymarket...');
+  
+  for (const category of targetCategories) {
+    try {
+      const markets = await fetchMarketsByCategory(category, 5);
+      if (markets.length > 0) {
+        // Select the market with highest liquidity in this category
+        const bestMarket = markets.sort((a, b) => 
+          parseFloat(b.liquidity || '0') - parseFloat(a.liquidity || '0')
+        )[0];
+        
+        // Ensure category is set
+        bestMarket.category = category;
+        selectedMarkets.push(bestMarket);
+        console.log(`  ✅ ${category}: "${bestMarket.question.substring(0, 50)}..."`);
+      }
+    } catch (err) {
+      console.error(`  ❌ Failed to fetch ${category} markets:`, err.message);
+    }
+  }
+  
+  // If we didn't get all categories, fill with samples
+  if (selectedMarkets.length < 3) {
+    console.log(`  ⚠️ Only found ${selectedMarkets.length} categories, adding sample markets...`);
+    const samples = getSampleMarkets();
+    const missingCategories = targetCategories.filter(cat => 
+      !selectedMarkets.some(m => m.category === cat)
+    );
+    
+    for (let i = 0; i < missingCategories.length && selectedMarkets.length < 3; i++) {
+      const sample = samples.find(s => s.category === missingCategories[i]) || samples[i];
+      if (sample) {
+        sample.category = missingCategories[i];
+        selectedMarkets.push(sample);
+        console.log(`  📋 Added ${missingCategories[i]} sample market`);
+      }
+    }
+  }
+  
+  return selectedMarkets;
+}
+
+/**
  * Fetches a specific market by ID
  * @param {string} marketId - The Polymarket market ID
  * @returns {Promise<Object>} Market object
@@ -146,6 +219,16 @@ function getSampleMarkets() {
       category: 'Technology'
     }
   ];
+}
+
+/**
+ * Get sample markets by specific category
+ */
+function getSampleMarketsByCategory(category) {
+  const allSamples = getSampleMarkets();
+  return allSamples.filter(m => 
+    m.category.toLowerCase() === category.toLowerCase()
+  );
 }
 
 /**

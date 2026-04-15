@@ -7,9 +7,9 @@ import { loadMarkets } from '../db.js';
  * Characteristics:
  * - High confidence threshold (80%+)
  * - Fixed position size: 0.01 USDT per trade
- * - Maximum 3 trades per day
+ * - Maximum 3 trades per day across different market types
  * - Focus on arbitrage opportunities
- * - Avoids volatile markets
+ * - Diversifies across Politics, Crypto, and Technology markets
  * 
  * Philosophy: "Capital preservation over returns"
  */
@@ -28,14 +28,18 @@ export class AlphaAgent extends TradingAgent {
         minLiquidity: 50000,      // $50k minimum liquidity
         minTimeToExpiry: 7 * 24 * 60 * 60 * 1000, // 7 days
         maxImpliedProb: 0.7,     // Don't bet on obvious outcomes
-        minImpliedProb: 0.3      // Don't bet on unlikely outcomes
+        minImpliedProb: 0.3,      // Don't bet on unlikely outcomes
+        preferredCategories: ['Politics', 'Crypto', 'Technology'] // Trade across all types
       }
     });
+    
+    // Track which categories have been traded today
+    this.tradedCategories = new Set();
   }
   
   /**
    * Alpha's evaluation logic
-   * Only trades if within daily limit
+   * Prioritizes trading on different market types for diversification
    */
   async evaluateMarket(market) {
     // Check daily trade limit first
@@ -72,8 +76,17 @@ export class AlphaAgent extends TradingAgent {
       };
     }
     
+    // Check if we've already traded this category today
+    const alreadyTradedThisCategory = this.tradedCategories.has(metrics.category);
+    if (alreadyTradedThisCategory && this.dailyTrades >= 2) {
+      return {
+        shouldTrade: false,
+        confidence: 0,
+        reasoning: `Already traded ${metrics.category} today, waiting for different category`
+      };
+    }
+    
     // Alpha looks for mispriced markets
-    // If implied probability is extreme, there's value in contrarian bet
     let position, confidence;
     
     if (metrics.impliedProb > this.strategyParams.maxImpliedProb) {
@@ -92,13 +105,32 @@ export class AlphaAgent extends TradingAgent {
       };
     }
     
+    // Record this category as traded
+    this.tradedCategories.add(metrics.category);
+    
     return {
       shouldTrade: true,
       confidence: confidence,
       position: position,
       amount: this.maxPositionSize, // Fixed: 0.01 USDT
-      reasoning: `Alpha strategy: ${position} at ${(metrics.impliedProb * 100).toFixed(1)}% implied probability. Trade ${tradeStatus.remaining} of ${this.maxTradesPerDay} today.`
+      reasoning: `Alpha strategy: ${position} on ${metrics.category} market. Trade ${tradeStatus.remaining} of ${this.maxTradesPerDay} today. Categories traded: ${Array.from(this.tradedCategories).join(', ')}`
     };
+  }
+  
+  /**
+   * Override recordDailyTrade to reset category tracking on new day
+   */
+  recordDailyTrade() {
+    const today = new Date().toDateString();
+    
+    if (this.lastTradeDate !== today) {
+      this.dailyTrades = 0;
+      this.lastTradeDate = today;
+      this.tradedCategories.clear(); // Reset category tracking
+    }
+    
+    this.dailyTrades++;
+    this.lastTradeTime = Date.now();
   }
 }
 

@@ -6,9 +6,10 @@ import TradingAgent from './TradingAgent.js';
  * Characteristics:
  * - Lower confidence threshold (60%+)
  * - Fixed position size: 0.01 USDT per trade
- * - Maximum 3 trades per day
+ * - Maximum 3 trades per day across different market types
  * - Momentum-based trading
  * - Follows the money (majority bet)
+ * - Diversifies across Politics, Crypto, and Technology markets
  * 
  * Philosophy: "Ride the wave, cut losses quickly"
  */
@@ -26,6 +27,7 @@ export class SigmaAgent extends TradingAgent {
       strategyParams: {
         minPoolSize: 1000,       // Minimum total pool
         momentumThreshold: 0.6,  // Follow if >60% betting one way
+        preferredCategories: ['Politics', 'Crypto', 'Technology'], // Trade across all types
         categoryBias: {
           'Crypto': 1.2,         // 20% more confident in crypto
           'Politics': 0.9,       // 10% less confident in politics
@@ -37,11 +39,14 @@ export class SigmaAgent extends TradingAgent {
     
     // Sigma tracks market sentiment
     this.sentimentCache = new Map();
+    
+    // Track which categories have been traded today
+    this.tradedCategories = new Set();
   }
   
   /**
    * Sigma's evaluation logic
-   * Only trades if within daily limit
+   * Prioritizes trading on different market types for diversification
    */
   async evaluateMarket(market) {
     // Check daily trade limit first
@@ -65,6 +70,17 @@ export class SigmaAgent extends TradingAgent {
       };
     }
     
+    // Check if we've already traded this category today
+    const category = market.category || 'General';
+    const alreadyTradedThisCategory = this.tradedCategories.has(category);
+    if (alreadyTradedThisCategory && this.dailyTrades >= 2) {
+      return {
+        shouldTrade: false,
+        confidence: 0,
+        reasoning: `Already traded ${category} today, waiting for different category`
+      };
+    }
+    
     // Calculate momentum
     const momentum = this._calculateMomentum(market);
     if (momentum.strength < this.strategyParams.momentumThreshold) {
@@ -76,7 +92,7 @@ export class SigmaAgent extends TradingAgent {
     }
     
     // Apply category bias
-    const categoryBias = this.strategyParams.categoryBias[market.category] || 1.0;
+    const categoryBias = this.strategyParams.categoryBias[category] || 1.0;
     const adjustedConfidence = Math.min(momentum.strength * categoryBias, 0.95);
     
     if (adjustedConfidence < this.minConfidence) {
@@ -87,12 +103,15 @@ export class SigmaAgent extends TradingAgent {
       };
     }
     
+    // Record this category as traded
+    this.tradedCategories.add(category);
+    
     return {
       shouldTrade: true,
       confidence: adjustedConfidence,
       position: momentum.direction,
       amount: this.maxPositionSize, // Fixed: 0.01 USDT
-      reasoning: `Sigma strategy: Following ${momentum.direction} momentum. Trade ${tradeStatus.remaining} of ${this.maxTradesPerDay} today.`
+      reasoning: `Sigma strategy: Following ${momentum.direction} momentum on ${category}. Trade ${tradeStatus.remaining} of ${this.maxTradesPerDay} today. Categories: ${Array.from(this.tradedCategories).join(', ')}`
     };
   }
   
@@ -135,6 +154,22 @@ export class SigmaAgent extends TradingAgent {
     // This would ideally query recent bets from DB
     // For now, simplified
     return 0;
+  }
+  
+  /**
+   * Override recordDailyTrade to reset category tracking on new day
+   */
+  recordDailyTrade() {
+    const today = new Date().toDateString();
+    
+    if (this.lastTradeDate !== today) {
+      this.dailyTrades = 0;
+      this.lastTradeDate = today;
+      this.tradedCategories.clear(); // Reset category tracking
+    }
+    
+    this.dailyTrades++;
+    this.lastTradeTime = Date.now();
   }
 }
 
