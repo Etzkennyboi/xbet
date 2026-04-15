@@ -18,19 +18,13 @@ COPY package.json package-lock.json* ./
 RUN npm install
 
 # Copy backend source
-COPY src ./src
+COPY backend ./backend
 
-# Copy frontend source and build it
+# Copy frontend
 COPY frontend ./frontend
-WORKDIR /app/frontend
-RUN npm install
-RUN npm run build
-
-# Go back to root
-WORKDIR /app
 
 # Expose the API port
-EXPOSE 3001
+EXPOSE 3000
 
 # Start the application
 CMD ["npm", "start"]
