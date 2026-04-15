@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,33 +18,23 @@
 
     <main>
       <section class="panel">
-        <h2>ACTIVE MARKETS</h2>
+        <h2>ACTIVE MARKETS <span class="stats-badge"><span id="total-markets">0</span> markets</span></h2>
         <div class="filters">
           <div class="filter-group">
-            <span class="filter-label">Asset:</span>
-            <div class="filter-btns" id="asset-filters">
-              <button class="filter-btn active" data-asset="ALL">ALL</button>
-              <button class="filter-btn" data-asset="BTC">BTC</button>
-              <button class="filter-btn" data-asset="ETH">ETH</button>
-              <button class="filter-btn" data-asset="SOL">SOL</button>
-            </div>
-          </div>
-          <div class="filter-group">
-            <span class="filter-label">Timeframe:</span>
-            <div class="filter-btns" id="time-filters">
-              <button class="filter-btn active" data-time="ALL">ALL</button>
-              <button class="filter-btn" data-time="2">2m</button>
-              <button class="filter-btn" data-time="60">1h</button>
-              <button class="filter-btn" data-time="360">6h</button>
+            <span class="filter-label">Category:</span>
+            <div class="filter-btns" id="category-filters">
+              <button class="filter-btn active" data-category="ALL">ALL</button>
+              <button class="filter-btn" data-category="Politics">Politics</button>
+              <button class="filter-btn" data-category="Crypto">Crypto</button>
+              <button class="filter-btn" data-category="Technology">Tech</button>
             </div>
           </div>
         </div>
         <div id="markets-container" class="markets-container">
           <div class="loading">
-             Waiting for Agent to create markets...
+             Fetching markets from Polymarket...
           </div>
         </div>
-
       </section>
 
       <section class="panel">
@@ -57,11 +46,12 @@
                 <th>Market</th>
                 <th>Position</th>
                 <th>Stake</th>
-                <th>Result</th>
+                <th>Status</th>
+                <th>Payout</th>
               </tr>
             </thead>
             <tbody id="bets-tbody">
-              <tr><td colspan="4" class="empty-state">No bets placed yet</td></tr>
+              <tr><td colspan="5" class="empty-state">No bets placed yet</td></tr>
             </tbody>
           </table>
         </div>
@@ -79,7 +69,11 @@
     <div id="bet-modal" class="modal">
       <div class="modal-content">
         <span class="close-btn" onclick="closeModal()">&times;</span>
-        <h3 id="modal-question" class="modal-title"></h3>
+        <div class="modal-header">
+          <img id="modal-image" src="" alt="" class="modal-image" style="display:none;">
+          <h3 id="modal-question" class="modal-title"></h3>
+        </div>
+        <p id="modal-description" class="modal-description"></p>
         
         <div class="modal-details">
           <div class="detail-row">
@@ -87,14 +81,18 @@
             <strong id="modal-position"></strong>
           </div>
           <div class="detail-row">
+            <span>Time remaining:</span>
+            <span id="modal-time-remaining"></span>
+          </div>
+          <div class="detail-row">
             <span>Minimum stake:</span>
-            <span>0.01 USDC</span>
+            <span>0.50 USDT</span>
           </div>
           <div class="detail-row input-row">
             <span>Enter amount:</span>
             <div class="input-wrapper">
-              <input type="number" id="bet-amount" min="0.01" step="0.01" value="0.05">
-              <span>USDC</span>
+              <input type="number" id="bet-amount" min="0.50" max="50.00" step="0.01" value="1.00">
+              <span>USDT</span>
             </div>
           </div>
           <div class="detail-row">
@@ -112,18 +110,4 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
-=======
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
->>>>>>> 085eac40714c874d43f20d6df62345631223d861
 </html>
